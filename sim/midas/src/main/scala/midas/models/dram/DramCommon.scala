@@ -24,7 +24,8 @@ trait HasDRAMMASConstants {
 }
 
 object DRAMMasEnums extends HasDRAMMASConstants {
-  val cmd_nop :: cmd_act :: cmd_pre :: cmd_casw :: cmd_casr :: cmd_ref :: Nil = Enum(6)
+  // cmd_refsb (single-bank refresh) is only emitted by the HBM model
+  val cmd_nop :: cmd_act :: cmd_pre :: cmd_casw :: cmd_casr :: cmd_ref :: cmd_refsb :: Nil = Enum(7)
   val bank_idle :: bank_active :: Nil                                         = Enum(numBankStates)
   val rank_active :: rank_refresh :: Nil                                      = Enum(numRankStates)
 }
@@ -611,6 +612,9 @@ class CommandBusMonitor extends Module {
     }
     is(cmd_ref) {
       printf("refresh(%d); // %d\n", io.rank, cycleCounter)
+    }
+    is(cmd_refsb) {
+      printf("refsb(%d,%d); // %d\n", io.rank, io.bank, cycleCounter)
     }
     is(cmd_pre) {
       val preAll = false.B

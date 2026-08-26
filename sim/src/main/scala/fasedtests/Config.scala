@@ -162,6 +162,20 @@ class DefaultF1Config
         new midas.F1Config
     )
 
+class DefaultF2Config
+    extends Config(
+      new WithDefaultMemModel ++
+        new midas.F2Config
+    )
+
+// AXI4Fuzzer against the HBM2 pseudo-channel timing model (for stress
+// testing the model's legality assertions and extracting command traces)
+class HBMF2Config
+    extends Config(
+      new HBM2FRFCFS16GBDualPC ++
+        new midas.F2Config
+    )
+
 class SmallQuadChannelHostConfig
     extends Config(new Config((site, _, _) => {
       case midas.core.HostMemNumChannels => 4

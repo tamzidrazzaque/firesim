@@ -9,6 +9,7 @@ case object MemModelKey         extends Field[BaseConfig]
 case object BaseParamsKey       extends Field[BaseParams]
 case object LlcKey              extends Field[Option[LLCParams]]
 case object DramOrganizationKey extends Field[DramOrganizationParams]
+case object HBMOrganizationKey  extends Field[HBMOrganizationParams]
 
 // Instantiates an AXI4 memory model that executes (1 / clockDivision) of the frequency
 // of the RTL transformed model (Rocket Chip)
@@ -21,6 +22,16 @@ class WithDefaultMemModel
       case BaseParamsKey       => BaseParams(maxReads = 16, maxWrites = 16, beatCounters = true, llcKey = site(LlcKey))
 
       case MemModelKey => new LatencyPipeConfig(site(BaseParamsKey))
+
+      // Only used if an HBM model is requested. One HBM2 channel in
+      // pseudo-channel mode: 2 PCs x 4 bank groups x 4 banks.
+      case HBMOrganizationKey =>
+        HBMOrganizationParams(
+          maxPseudoChannels = 2,
+          maxBankGroups     = 4,
+          banksPerGroup     = 4,
+          channelSize       = BigInt(1) << 34,
+        )
     })
 
 /** ***************************************************************************** Memory-timing model configuration
@@ -70,6 +81,19 @@ class WithDDR3FRFCFS(windowSize: Int, queueDepth: Int)
       )
     })
 
+// Instantiates an HBM2 (pseudo-channel mode) model with a FR-FCFS memory
+// access scheduler. Timings are runtime-programmable; defaults are the
+// HBM2-2400 table (see HBMTimingTables for alternates, including PARE).
+class WithHBM2FRFCFS(windowSize: Int, queueDepth: Int)
+    extends Config((site, _, _) => { case MemModelKey =>
+      new HBMModelConfig(
+        schedulerWindowSize   = windowSize,
+        transactionQueueDepth = queueDepth,
+        hbmKey                = site(HBMOrganizationKey),
+        params                = site(BaseParamsKey),
+      )
+    })
+
 // Changes the functional model capacity limits
 class WithFuncModelLimits(maxReads: Int, maxWrites: Int)
     extends Config((_, _, up) => { case BaseParamsKey =>
@@ -115,4 +139,17 @@ class FRFCFS16GBQuadRankLLC4MB
     extends Config(
       new WithLLCModel(4096, 8) ++
         new FRFCFS16GBQuadRank
+    )
+
+// HBM2 - First-Ready FCFS models (one channel, dual pseudo-channel)
+class HBM2FRFCFS16GBDualPC
+    extends Config(
+      new WithFuncModelLimits(32, 32) ++
+        new WithHBM2FRFCFS(8, 8) ++
+        new WithDefaultMemModel
+    )
+class HBM2FRFCFS16GBDualPCLLC4MB
+    extends Config(
+      new WithLLCModel(4096, 8) ++
+        new HBM2FRFCFS16GBDualPC
     )
