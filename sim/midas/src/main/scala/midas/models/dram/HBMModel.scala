@@ -86,6 +86,21 @@ case class HBMOrganizationParams(
   def maxRows    = 1 << rowBits
 }
 
+/** Width of HBM timing registers and of every state element that stores or
+  * compares against them (DownCounters, the tFAW window queue, the truncated
+  * tCycle used for tFAW bookkeeping, and the backend latency path).
+  *
+  * The stock DDR3 model uses maxDRAMTimingBits = 7, which is too narrow for
+  * HBM: tRFCab @ tCK = 833 ps is already 421 CK, and alternate tables (e.g.
+  * PARE) may program larger values into *any* field. 16 bits accommodates
+  * every JESD235 timing at HBM2 clocks with ample headroom, and keeps all
+  * modular-arithmetic comparisons (tCycle + t === tCycle') consistent as
+  * long as every programmed timing fits in 16 bits.
+  */
+trait HasHBMTimingConstants {
+  val hbmTimingBits = 16
+}
+
 /** Named HBM2 timing tables, in units of the controller clock (CK).
   *
   * The HBM2 speed grades follow JESD235B/D; secondary parameters (tRRD, tFAW,
@@ -189,30 +204,31 @@ object HBMTimingTables {
 class HBMProgrammableTimings
     extends Bundle
     with HasDRAMMASConstants
+    with HasHBMTimingConstants
     with HasProgrammableRegisters
     with HasConsoleUtils {
-  val tCAS   = UInt(maxDRAMTimingBits.W)
-  val tCWD   = UInt(maxDRAMTimingBits.W)
-  val tBL    = UInt(maxDRAMTimingBits.W)
-  val tCMD   = UInt(maxDRAMTimingBits.W)
-  val tCCDS  = UInt(maxDRAMTimingBits.W)
-  val tCCDL  = UInt(maxDRAMTimingBits.W)
-  val tRRDS  = UInt(maxDRAMTimingBits.W)
-  val tRRDL  = UInt(maxDRAMTimingBits.W)
-  val tFAW   = UInt(maxDRAMTimingBits.W)
-  val tWTRS  = UInt(maxDRAMTimingBits.W)
-  val tWTRL  = UInt(maxDRAMTimingBits.W)
-  val tRCDRD = UInt(maxDRAMTimingBits.W)
-  val tRCDWR = UInt(maxDRAMTimingBits.W)
-  val tRP    = UInt(maxDRAMTimingBits.W)
-  val tRAS   = UInt(maxDRAMTimingBits.W)
-  val tRC    = UInt(maxDRAMTimingBits.W)
-  val tRTP   = UInt(maxDRAMTimingBits.W)
-  val tWR    = UInt(maxDRAMTimingBits.W)
-  val tREFI  = UInt(tREFIBits.W)
-  val tRFC   = UInt(tRFCBits.W)
-  val tRFCSB = UInt(tRFCBits.W)
-  val tRREFD = UInt(maxDRAMTimingBits.W)
+  val tCAS   = UInt(hbmTimingBits.W)
+  val tCWD   = UInt(hbmTimingBits.W)
+  val tBL    = UInt(hbmTimingBits.W)
+  val tCMD   = UInt(hbmTimingBits.W)
+  val tCCDS  = UInt(hbmTimingBits.W)
+  val tCCDL  = UInt(hbmTimingBits.W)
+  val tRRDS  = UInt(hbmTimingBits.W)
+  val tRRDL  = UInt(hbmTimingBits.W)
+  val tFAW   = UInt(hbmTimingBits.W)
+  val tWTRS  = UInt(hbmTimingBits.W)
+  val tWTRL  = UInt(hbmTimingBits.W)
+  val tRCDRD = UInt(hbmTimingBits.W)
+  val tRCDWR = UInt(hbmTimingBits.W)
+  val tRP    = UInt(hbmTimingBits.W)
+  val tRAS   = UInt(hbmTimingBits.W)
+  val tRC    = UInt(hbmTimingBits.W)
+  val tRTP   = UInt(hbmTimingBits.W)
+  val tWR    = UInt(hbmTimingBits.W)
+  val tREFI  = UInt(hbmTimingBits.W)
+  val tRFC   = UInt(hbmTimingBits.W)
+  val tRFCSB = UInt(hbmTimingBits.W)
+  val tRREFD = UInt(hbmTimingBits.W)
 
   val registers = Seq(
     tCAS   -> RuntimeSetting(17, "CAS (read) latency, nCL"),
@@ -253,7 +269,9 @@ case class HBMModelConfig(
   hbmKey:                HBMOrganizationParams,
   schedulerWindowSize:   Int,
   transactionQueueDepth: Int,
-  backendKey:            DRAMBackendKey = DRAMBackendKey(4, 4, DRAMMasEnums.backendLatencyBits),
+  // hbmTimingBits-wide backend so (tCAS + backendLatency) cannot truncate in
+  // the DynamicLatencyPipe when large timing tables are programmed at runtime
+  backendKey:            DRAMBackendKey = DRAMBackendKey(4, 4, 16),
   params:                BaseParams,
 ) extends HBMBaseConfig {
   def elaborate()(implicit p: Parameters): HBMModel = Module(new HBMModel(this))
@@ -403,17 +421,20 @@ class HBMBankStateTrackerIO(val key: HBMOrganizationParams) extends Bundle {
   val cmdUsesThisBank = Input(Bool())
 }
 
-class HBMBankStateTracker(key: HBMOrganizationParams) extends Module with HasDRAMMASConstants {
+class HBMBankStateTracker(key: HBMOrganizationParams)
+    extends Module
+    with HasDRAMMASConstants
+    with HasHBMTimingConstants {
   import DRAMMasEnums._
   val io = IO(new HBMBankStateTrackerIO(key))
 
   val state       = RegInit(bank_idle)
   val openRowAddr = Reg(UInt(key.rowBits.W))
 
-  val nextLegalPRE  = Module(new DownCounter(maxDRAMTimingBits))
-  val nextLegalACT  = Module(new DownCounter(tRFCBits))
-  val nextLegalCASR = Module(new DownCounter(maxDRAMTimingBits))
-  val nextLegalCASW = Module(new DownCounter(maxDRAMTimingBits))
+  val nextLegalPRE  = Module(new DownCounter(hbmTimingBits))
+  val nextLegalACT  = Module(new DownCounter(hbmTimingBits))
+  val nextLegalCASR = Module(new DownCounter(hbmTimingBits))
+  val nextLegalCASW = Module(new DownCounter(hbmTimingBits))
 
   Seq(nextLegalPRE, nextLegalACT, nextLegalCASR, nextLegalCASW).foreach { mod =>
     mod.io.decr      := true.B
@@ -425,16 +446,25 @@ class HBMBankStateTracker(key: HBMOrganizationParams) extends Module with HasDRA
     switch(io.selectedCmd) {
       is(cmd_act) {
         assert(io.out.canACT, "HBM Bank Timing Violation: Controller issued ACT command illegally")
+        // JESD235 ACT is a two-frame command; the model issues (and stamps)
+        // it on its first frame, but the DRAM registers it on the second.
+        // ACT-relative bank timings therefore get +1 relative to the issue
+        // cycle: RD at +(tRCDRD+1), WR at +(tRCDWR+1), PRE at +(tRAS+1).
+        // ACT-to-ACT spacings (tRC here, tRRD/tFAW in the PC tracker) are
+        // measured second-frame to second-frame, so the offsets cancel;
+        // tRC is nonetheless programmed un-decremented so that the
+        // REF/REFSB gate (canACT) also observes ACT-to-REF = tRC + 1,
+        // making same-bank ACT-to-ACT conservative by one cycle.
         state                      := bank_active
         openRowAddr                := io.cmdRow
         nextLegalCASR.io.set.valid := true.B
-        nextLegalCASR.io.set.bits  := io.timings.tRCDRD - 1.U
+        nextLegalCASR.io.set.bits  := io.timings.tRCDRD
         nextLegalCASW.io.set.valid := true.B
-        nextLegalCASW.io.set.bits  := io.timings.tRCDWR - 1.U
+        nextLegalCASW.io.set.bits  := io.timings.tRCDWR
         nextLegalPRE.io.set.valid  := true.B
-        nextLegalPRE.io.set.bits   := io.timings.tRAS - 1.U
+        nextLegalPRE.io.set.bits   := io.timings.tRAS
         nextLegalACT.io.set.valid  := true.B
-        nextLegalACT.io.set.bits   := io.timings.tRC - 1.U
+        nextLegalACT.io.set.bits   := io.timings.tRC
       }
       is(cmd_casr) {
         assert(io.out.canCASR, "HBM Bank Timing Violation: Controller issued CASR command illegally")
@@ -518,7 +548,8 @@ class HBMPseudoChannelStateTrackerO(val key: HBMOrganizationParams) extends Bund
 
 class HBMPseudoChannelStateTrackerIO(val key: HBMOrganizationParams)
     extends Bundle
-    with HasDRAMMASConstants {
+    with HasDRAMMASConstants
+    with HasHBMTimingConstants {
   import DRAMMasEnums._
   val timings          = Input(new HBMProgrammableTimings)
   val perBankRefresh   = Input(Bool())
@@ -535,28 +566,34 @@ class HBMPseudoChannelStateTrackerIO(val key: HBMOrganizationParams)
   val cmdRow           = Input(UInt(key.rowBits.W))
   val autoPRE          = Input(Bool())
   val pc               = new HBMPseudoChannelStateTrackerO(key)
-  val tCycle           = Input(UInt(maxDRAMTimingBits.W))
+  // Truncated view of the model's 64-bit cycle counter, used only for
+  // modular tFAW bookkeeping (tCycle + tFAW === tCycle', valid because
+  // every timing fits in hbmTimingBits).
+  val tCycle           = Input(UInt(hbmTimingBits.W))
 }
 
-class HBMPseudoChannelStateTracker(key: HBMOrganizationParams) extends Module with HasDRAMMASConstants {
+class HBMPseudoChannelStateTracker(key: HBMOrganizationParams)
+    extends Module
+    with HasDRAMMASConstants
+    with HasHBMTimingConstants {
   import DRAMMasEnums._
 
   val io = IO(new HBMPseudoChannelStateTrackerIO(key))
   val t  = io.timings
 
   // Pseudo-channel-scope legality (short / cross-bank-group constraints)
-  val nextLegalPRE   = Module(new DownCounter(maxDRAMTimingBits))
-  val nextLegalACT   = Module(new DownCounter(tRFCBits))
-  val nextLegalCASR  = Module(new DownCounter(maxDRAMTimingBits))
-  val nextLegalCASW  = Module(new DownCounter(maxDRAMTimingBits))
-  val nextLegalREFSB = Module(new DownCounter(tRFCBits))
+  val nextLegalPRE   = Module(new DownCounter(hbmTimingBits))
+  val nextLegalACT   = Module(new DownCounter(hbmTimingBits))
+  val nextLegalCASR  = Module(new DownCounter(hbmTimingBits))
+  val nextLegalCASW  = Module(new DownCounter(hbmTimingBits))
+  val nextLegalREFSB = Module(new DownCounter(hbmTimingBits))
 
   // Bank-group-scope legality (long / same-bank-group constraints)
-  val bgNextLegalCASR = Seq.fill(key.maxBankGroups)(Module(new DownCounter(maxDRAMTimingBits)))
-  val bgNextLegalCASW = Seq.fill(key.maxBankGroups)(Module(new DownCounter(maxDRAMTimingBits)))
-  val bgNextLegalACT  = Seq.fill(key.maxBankGroups)(Module(new DownCounter(maxDRAMTimingBits)))
+  val bgNextLegalCASR = Seq.fill(key.maxBankGroups)(Module(new DownCounter(hbmTimingBits)))
+  val bgNextLegalCASW = Seq.fill(key.maxBankGroups)(Module(new DownCounter(hbmTimingBits)))
+  val bgNextLegalACT  = Seq.fill(key.maxBankGroups)(Module(new DownCounter(hbmTimingBits)))
 
-  val refCounter = RegInit(0.U(tREFIBits.W))
+  val refCounter = RegInit(0.U(hbmTimingBits.W))
   val state      = RegInit(rank_active)
   val wantREF    = RegInit(false.B)
   val refsbBank  = RegInit(0.U(key.bankBits.W))

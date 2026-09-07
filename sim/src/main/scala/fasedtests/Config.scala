@@ -83,6 +83,11 @@ class WithFuzzerMask(mask: BigInt)
     })
 class FuzzMask3FFF extends WithFuzzerMask(0x3fff)
 
+// With the default HBM address layout ([9:0] line | [13:10] bank | [14] PC |
+// [21:15] row), constrain the fuzzer to PC 0, bank 0 while letting the row
+// bits vary: a directed row-conflict / bank-timing (tRC/tRAS/tRP) stressor.
+class FuzzMaskSingleBank extends WithFuzzerMask(0x3f83ff)
+
 // Generates N fuzzers mastering non-overlapping chunks of the target memory space
 class WithNFuzzers(numFuzzers: Int)
     extends Config((site, _, _) => { case FuzzerParametersKey =>

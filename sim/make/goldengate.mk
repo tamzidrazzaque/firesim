@@ -50,4 +50,5 @@ conf: $(fame_annos) $(FIRESIM_MAIN_CP)
 		-td $(GENERATED_DIR) \
 		-faf $(fame_annos) \
 		-ggcp $(PLATFORM_CONFIG_PACKAGE) \
-		-ggcs $(PLATFORM_CONFIG))
+		-ggcs $(PLATFORM_CONFIG) \
+		-ggrc $(DESIGN)-$(PLATFORM_CONFIG).runtime.conf)
