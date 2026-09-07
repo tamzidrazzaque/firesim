@@ -272,6 +272,10 @@ case class HBMModelConfig(
   // hbmTimingBits-wide backend so (tCAS + backendLatency) cannot truncate in
   // the DynamicLatencyPipe when large timing tables are programmed at runtime
   backendKey:            DRAMBackendKey = DRAMBackendKey(4, 4, 16),
+  // When true, print one machine-parseable "HBMREQ,..." line per memory
+  // transaction accepted by the scheduler (metasim only; adds no state and
+  // no backpressure). See HBMModel.requestTrace below for the format.
+  requestTrace:          Boolean = false,
   params:                BaseParams,
 ) extends HBMBaseConfig {
   def elaborate()(implicit p: Parameters): HBMModel = Module(new HBMModel(this))
@@ -800,6 +804,31 @@ class HBMModel(cfg: HBMModelConfig)(implicit p: Parameters)
   })
 
   xactionScheduler.io.nextXaction.ready := newReference.ready
+
+  // --------------------------------------------------------------------
+  // Optional request trace (cfg.requestTrace): one CSV line per memory
+  // transaction as it is accepted into the scheduler, using the exact same
+  // runtime-programmable decode the scheduler itself uses. Format:
+  //   HBMREQ,<tCycle>,<isWrite>,<addr hex>,<axi id>,<axi len>,
+  //          <pseudo channel>,<bank group>,<bank>,<row hex>
+  // Purely observational: no state, no effect on newReference readiness.
+  // --------------------------------------------------------------------
+  if (cfg.requestTrace) {
+    when(newReference.fire) {
+      printf(
+        "HBMREQ,%d,%d,%x,%d,%d,%d,%d,%d,%x\n",
+        tCycle,
+        newReference.bits.xaction.isWrite,
+        xactionScheduler.io.nextXaction.bits.addr,
+        newReference.bits.xaction.id,
+        newReference.bits.xaction.len,
+        newReference.bits.pcAddr,
+        newReference.bits.bankGroupAddr,
+        newReference.bits.bankAddr,
+        newReference.bits.rowAddr,
+      )
+    }
+  }
 
   val refBuffer  = CollapsingBuffer(
     enq               = newReference,

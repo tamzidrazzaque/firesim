@@ -52,6 +52,32 @@ Individual traces can be checked with:
 ./scripts/hbm-validation/check_trace_ramulator.py trace.csv --ramulator $RAMULATOR2_DIR
 ```
 
+## Per-request trace (single-channel controller validation)
+
+Building against `PLATFORM_CONFIG=HBMF2ReqTraceConfig` (fasedtests) — or any
+platform config layered with `firesim.configs.WithHBMRequestTrace` — makes the
+HBM model print one line per memory transaction accepted by its scheduler:
+
+```
+HBMREQ,<tCycle>,<isWrite>,<addr hex>,<axi id>,<axi len>,<pc>,<bg>,<bank>,<row hex>
+```
+
+The pc/bg/bank/row fields are the model's own runtime-programmable decode of
+the address, i.e. exactly what the scheduler uses. Each FASED instance is one
+memory channel, so this is inherently a single-channel request trace. The
+monitor is elaboration-gated (`HBMModelConfig.requestTrace`), adds no state,
+and exerts no backpressure. Convert a metasim log into a clean CSV (with the
+derived column and byte offset) using:
+
+```bash
+./scripts/hbm-validation/parse_hbm_req_trace.py metasim.log -o reqs.csv
+```
+
+This request stream is the input side of the PARE-controller-vs-HBM-model
+comparison: replay it into the controller under test, then compare decode,
+command-trace legality (via `check_trace_ramulator.py`), and aggregate
+row-hit / latency statistics.
+
 ## HBM runtime configurations
 
 `sim/custom-runtime-configs/hbm2-FRFCFS-2400-{OP-REFab,OP-REFSB,CP-REFab}.conf`

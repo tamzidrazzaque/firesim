@@ -181,6 +181,15 @@ class HBMF2Config
         new midas.F2Config
     )
 
+// As HBMF2Config, but additionally emits one "HBMREQ,..." CSV line per
+// memory transaction accepted by the HBM scheduler (single-channel request
+// trace for controller-vs-model validation).
+class HBMF2ReqTraceConfig
+    extends Config(
+      new WithHBMRequestTrace ++
+        new HBMF2Config
+    )
+
 class SmallQuadChannelHostConfig
     extends Config(new Config((site, _, _) => {
       case midas.core.HostMemNumChannels => 4

@@ -94,6 +94,21 @@ class WithHBM2FRFCFS(windowSize: Int, queueDepth: Int)
       )
     })
 
+// Enables the per-request CSV trace ("HBMREQ,..." lines on metasim stdout)
+// on an already-selected HBM memory model. Layer *in front of* a config that
+// sets MemModelKey to an HBMModelConfig, e.g.:
+//   new WithHBMRequestTrace ++ new HBM2FRFCFS16GBDualPC ++ ...
+class WithHBMRequestTrace
+    extends Config((_, _, up) => { case MemModelKey =>
+      up(MemModelKey) match {
+        case hbm: HBMModelConfig => hbm.copy(requestTrace = true)
+        case other               =>
+          throw new IllegalArgumentException(
+            s"WithHBMRequestTrace requires an HBMModelConfig, got: ${other.getClass.getName}"
+          )
+      }
+    })
+
 // Changes the functional model capacity limits
 class WithFuncModelLimits(maxReads: Int, maxWrites: Int)
     extends Config((_, _, up) => { case BaseParamsKey =>
