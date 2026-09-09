@@ -78,6 +78,43 @@ comparison: replay it into the controller under test, then compare decode,
 command-trace legality (via `check_trace_ramulator.py`), and aggregate
 row-hit / latency statistics.
 
+Per-workload/segment statistics (PC / bank-group / bank / row distributions,
+read-write mix, row switches) can be computed from that CSV with:
+
+```bash
+./scripts/hbm-validation/analyze_hbm_req_trace.py reqs.csv --gap 2000
+```
+
+The `--gap` heuristic segments the request stream on idle gaps, which for the
+Radiance MemPerf traffic-generator target correspond to the lane-barrier
+between traffic patterns.
+
+## Radiance -> HBM integrated run (chipyard graphics)
+
+With this FireSim branch checked out as `sims/firesim` inside a
+`ucb-bar/chipyard:graphics` workspace (see `HBM_RADIANCE_INTEGRATION_REPORT.md`
+at the chipyard root), the full single-channel Radiance-traffic-into-HBM
+metasim is built and run with:
+
+```bash
+cd <chipyard>/sims/firesim/sim
+make TARGET_PROJECT_MAKEFRAG=<chipyard>/generators/firechip/chip/src/main/makefrag/firesim \
+     TARGET_CONFIG=FireSimRadianceMemPerfConfig \
+     PLATFORM_CONFIG_PACKAGE=firesim.configs \
+     PLATFORM_CONFIG=WithHBMRequestTrace_HBM2FRFCFS16GBDualPC_BaseF2Config \
+     verilator
+cd generated-src/f2/f2-*FireSimRadianceMemPerfConfig*/
+./VFireSim +permissive $(grep -v '^\s*$\|^#' \
+    <firesim>/sim/custom-runtime-configs/hbm2-FRFCFS-2400-OP-REFab.conf | tr '\n' ' ') \
+    +fesvr-step-size=128 +max-cycles=12000000 +permissive-off none > run.log 2>&1
+```
+
+The log then contains both the `HBMREQ` request trace and the DRAM command
+trace, which feed `parse_hbm_req_trace.py` / `parse_fased_trace.py` /
+`check_trace_ramulator.py` unchanged. `examples/` holds a representative
+parsed request-trace sample and the per-segment statistics from a 24M-cycle
+run (613,255 requests; 1,396,609 commands; 0 Ramulator violations).
+
 ## HBM runtime configurations
 
 `sim/custom-runtime-configs/hbm2-FRFCFS-2400-{OP-REFab,OP-REFSB,CP-REFab}.conf`
