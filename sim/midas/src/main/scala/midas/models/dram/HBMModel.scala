@@ -15,10 +15,23 @@ import firesim.lib.nasti._
   * HBM2 (JESD235) memory timing model for FASED
   * =============================================================================
   *
-  * Models a single HBM2 channel operating in pseudo-channel (PC) mode with a
-  * first-ready FCFS memory access scheduler. Structurally this borrows from
-  * FirstReadyFCFSModel, with the DDR3 rank/bank hierarchy replaced by the
-  * JESD235 hierarchy:
+  * Models `maxChannels` (default 1) fully independent HBM2 channels, each
+  * operating in pseudo-channel (PC) mode with its own first-ready FCFS memory
+  * access scheduler. Structurally this borrows from FirstReadyFCFSModel, with
+  * the DDR3 rank/bank hierarchy replaced by the JESD235 hierarchy:
+  *
+  *   - Channels are the top of the JESD235 hierarchy and share *nothing*
+  *     electrically: each channel has its own command buses, bank state,
+  *     bank-group/PC timing trackers, refresh state, reference window,
+  *     scheduler, and completion pipes (one HBMChannelScheduler instance per
+  *     channel). The only shared structures are the AXI4 front-end
+  *     transaction queue that dispatches decoded requests to their target
+  *     channel (one request per cycle -- the input-bandwidth limit of the
+  *     single AXI4 port) and the response arbiters that merge per-channel
+  *     completions back onto the AXI4 R/B channels. Which address bits
+  *     select the channel is runtime-programmable (chAddr); the default is
+  *     a contiguous partition of the physical address space, with the
+  *     channel index in the bits directly above one channel's capacity.
   *
   *   - Pseudo-channels take the structural place of ranks. Each PC has
   *     independent bank state and an independent data bus, so there is no
@@ -54,7 +67,7 @@ import firesim.lib.nasti._
   * without regenerating the FPGA image.
   */
 
-/** Organization of a single HBM2 channel in pseudo-channel mode.
+/** Organization of the modeled HBM2 stack in pseudo-channel mode.
   *
   * @param maxPseudoChannels
   *   pseudo channels per channel (2 in HBM2 PC mode)
@@ -63,27 +76,34 @@ import firesim.lib.nasti._
   * @param banksPerGroup
   *   banks per bank group (4 in HBM2)
   * @param channelSize
-  *   bytes of addressable storage modeled by this instance. Like
+  *   bytes of addressable storage modeled *per channel*. Like
   *   DramOrganizationParams.dramSize this is an upper bound used to size
   *   address registers; the actual decode is runtime-programmable.
+  * @param maxChannels
+  *   independent HBM channels modeled by one HBMModel instance. Each channel
+  *   gets its own scheduler and complete timing state (see HBMModel header).
+  *   The total modeled capacity is maxChannels * channelSize.
   */
 case class HBMOrganizationParams(
   maxPseudoChannels: Int,
   maxBankGroups:     Int,
   banksPerGroup:     Int,
   channelSize:       BigInt,
+  maxChannels:       Int = 1,
   lineBits:          Int = 8,
 ) {
   require(isPow2(maxPseudoChannels) && maxPseudoChannels >= 2)
   require(isPow2(maxBankGroups))
   require(isPow2(banksPerGroup))
   require(isPow2(channelSize))
+  require(isPow2(maxChannels) && maxChannels >= 1)
   def maxBanks   = maxBankGroups * banksPerGroup // banks per pseudo channel
   def bankBits   = log2Up(maxBanks)
   def bankGroupBits = log2Up(maxBankGroups)
   def pcBits     = log2Up(maxPseudoChannels)
   def rowBits    = log2Ceil(channelSize) - lineBits
   def maxRows    = 1 << rowBits
+  def chBits     = log2Ceil(maxChannels) // 0 when single-channel
 }
 
 /** Width of HBM timing registers and of every state element that stores or
@@ -314,6 +334,28 @@ class HBMMMRegIO(val cfg: HBMModelConfig) extends MMRegIO(cfg) with HasConsoleUt
       defaultMask   = (cfg.hbmKey.channelSize >> defaultRowOffset) - 1,
     )
   )
+
+  // Channel select for multi-channel configurations. Only materialized when
+  // maxChannels > 1 so single-channel runtime configs remain valid with no
+  // new registers to program. The default is a contiguous partition of the
+  // address space: the channel index lives in the bits directly above one
+  // channel's capacity; both fields are runtime-programmable, so any other
+  // contiguous-bit-slice mapping (e.g. finer-grained partitions for small
+  // test footprints) can be selected without regenerating the design.
+  val chAddr = if (cfg.hbmKey.maxChannels > 1) {
+    Some(
+      Input(
+        new ProgrammableSubAddr(
+          maskBits      = cfg.hbmKey.chBits,
+          longName      = "Channel Address",
+          defaultOffset = log2Ceil(cfg.hbmKey.channelSize),
+          defaultMask   = cfg.hbmKey.maxChannels - 1,
+        )
+      )
+    )
+  } else {
+    None
+  }
 
   // Page policy 1 = open, 0 = closed
   val openPagePolicy = Input(Bool())
@@ -755,36 +797,51 @@ class HBMPseudoChannelStateTracker(key: HBMOrganizationParams)
 }
 
 // ============================================================================
-// The timing model
+// Per-channel scheduler
 // ============================================================================
+// One fully independent HBM channel: its own reference window, FR-FCFS
+// column/row command scheduling, pseudo-channel / bank-group / bank timing
+// state, refresh state, command buses, command-bus monitors, and completion
+// latency pipes (DRAMBackend). Channels share nothing but the AXI4 front-end
+// that dispatches requests to them and the response arbiters that merge
+// their completions, so references resident in different channels are
+// scheduled and timed completely independently.
 
-class HBMModelIO(val cfg: HBMModelConfig)(implicit p: Parameters) extends TimingModelIO()(p) {
-  val mmReg = new HBMMMRegIO(cfg)
+class HBMChannelSchedulerIO(val cfg: HBMModelConfig)(implicit val p: Parameters) extends Bundle {
+  // Decoded reference dispatched by the shared front-end; only asserted
+  // valid when this channel is the reference's decode target.
+  val newReference        = Flipped(Decoupled(new HBMEntry(p(NastiKey), cfg)))
+  // Runtime-programmable settings, shared across channels (one register
+  // file programs all channels identically, like ranks in the DDR3 model).
+  val timings             = Input(new HBMProgrammableTimings)
+  val openPagePolicy      = Input(Bool())
+  val perBankRefresh      = Input(Bool())
+  val schedulerWindowSize = Input(UInt(log2Ceil(cfg.schedulerWindowSize).W))
+  val pcsInUse            = Input(UInt(cfg.hbmKey.maxPseudoChannels.W))
+  val backendLatency      = Input(UInt(cfg.backendKey.latencyBits.W))
+  val tCycle              = Input(UInt(64.W))
+  // Completed transactions, to be merged onto the AXI4 response channels
+  val completedRead       = Decoupled(new ReadResponseMetaData(p(NastiKey)))
+  val completedWrite      = Decoupled(new WriteResponseMetaData(p(NastiKey)))
 }
 
-class HBMModel(cfg: HBMModelConfig)(implicit p: Parameters)
-    extends TimingModel(cfg)(p)
+class HBMChannelScheduler(cfg: HBMModelConfig, chIdx: Int)(implicit p: Parameters)
+    extends Module
     with HasDRAMMASConstants {
 
-  val longName = "HBM2 Pseudo-Channel First-Ready FCFS MAS"
-  def printTimingModelGenerationConfig: Unit = {}
-
-  /** ************************** CHISEL BEGINS ********************************
-    */
   import DRAMMasEnums._
-  lazy val io = IO(new HBMModelIO(cfg))
+  val io = IO(new HBMChannelSchedulerIO(cfg))
 
-  val timings = io.mmReg.hbmTimings
   val hbmKey  = cfg.hbmKey
+  val timings = io.timings
+  val tCycle  = io.tCycle
 
-  val backend          = Module(new DRAMBackend(p(NastiKey), cfg.backendKey))
-  val xactionScheduler = Module(new UnifiedFIFOXactionScheduler(p(NastiKey), cfg.transactionQueueDepth, cfg))
-  xactionScheduler.io.req          <> nastiReq
-  xactionScheduler.io.pendingAWReq := pendingAWReq.value
-  xactionScheduler.io.pendingWReq  := pendingWReq.value
+  // Completion latency pipes are per-channel: a CAS in one channel can never
+  // be delayed by another channel's completions.
+  val backend = Module(new DRAMBackend(p(NastiKey), cfg.backendKey))
 
-  // Two command buses, per JESD235: one row command (ACT / PRE / REF /
-  // REFSB) and one column command (CASR / CASW) may issue each cycle.
+  // Two command buses per channel, per JESD235: one row command (ACT / PRE /
+  // REF / REFSB) and one column command (CASR / CASW) may issue each cycle.
   val selectedRowCmd = WireInit(cmd_nop)
   val selectedColCmd = WireInit(cmd_nop)
 
@@ -795,45 +852,22 @@ class HBMModel(cfg: HBMModelConfig)(implicit p: Parameters)
     VecInit(Seq.fill(hbmKey.maxPseudoChannels * hbmKey.maxBanks)(false.B))
   )
 
+  // isReady / mayPRE depend on this channel's scheduler state at acceptance
+  // time, so they are recomputed here (below) rather than taken from the
+  // dispatched entry.
   val newReference = Wire(Decoupled(new HBMEntry(p(NastiKey), cfg)))
-  newReference.valid := xactionScheduler.io.nextXaction.valid
-  newReference.bits.decode(xactionScheduler.io.nextXaction.bits, io.mmReg)
+  newReference.valid    := io.newReference.valid
+  newReference.bits     := io.newReference.bits
+  io.newReference.ready := newReference.ready
 
   val rowHitsInPC = VecInit(pcStateTrackers.map { tracker =>
     VecInit(tracker.io.pc.banks.map { _.isRowHit(newReference.bits) }).asUInt
   })
 
-  xactionScheduler.io.nextXaction.ready := newReference.ready
-
-  // --------------------------------------------------------------------
-  // Optional request trace (cfg.requestTrace): one CSV line per memory
-  // transaction as it is accepted into the scheduler, using the exact same
-  // runtime-programmable decode the scheduler itself uses. Format:
-  //   HBMREQ,<tCycle>,<isWrite>,<addr hex>,<axi id>,<axi len>,
-  //          <pseudo channel>,<bank group>,<bank>,<row hex>
-  // Purely observational: no state, no effect on newReference readiness.
-  // --------------------------------------------------------------------
-  if (cfg.requestTrace) {
-    when(newReference.fire) {
-      printf(
-        "HBMREQ,%d,%d,%x,%d,%d,%d,%d,%d,%x\n",
-        tCycle,
-        newReference.bits.xaction.isWrite,
-        xactionScheduler.io.nextXaction.bits.addr,
-        newReference.bits.xaction.id,
-        newReference.bits.xaction.len,
-        newReference.bits.pcAddr,
-        newReference.bits.bankGroupAddr,
-        newReference.bits.bankAddr,
-        newReference.bits.rowAddr,
-      )
-    }
-  }
-
   val refBuffer  = CollapsingBuffer(
     enq               = newReference,
     depth             = cfg.schedulerWindowSize,
-    programmableDepth = Some(io.mmReg.schedulerWindowSize),
+    programmableDepth = Some(io.schedulerWindowSize),
   )
   val refList    = refBuffer.io.entries
   val refUpdates = refBuffer.io.updates
@@ -924,8 +958,8 @@ class HBMModel(cfg: HBMModelConfig)(implicit p: Parameters)
   val rowBank = WireInit(UInt(hbmKey.bankBits.W), init = preBank)
   val cmdRow  = actRow
 
-  val perBankRefresh    = io.mmReg.perBankRefresh
-  val pcsInUse          = io.mmReg.pcAddr.maskToOH()
+  val perBankRefresh    = io.perBankRefresh
+  val pcsInUse          = io.pcsInUse
   val pcsWantingRefresh = VecInit(pcStateTrackers.map { _.io.pc.wantREF }).asUInt
 
   // --- All-bank refresh (REFab) arbitration ---
@@ -996,7 +1030,7 @@ class HBMModel(cfg: HBMModelConfig)(implicit p: Parameters)
   }
 
   val otherReadyEntries = entriesStillReady.reduce { _ || _ }
-  val casAutoPRE        = Mux(io.mmReg.openPagePolicy, false.B, memReqDone && !otherReadyEntries)
+  val casAutoPRE        = Mux(io.openPagePolicy, false.B, memReqDone && !otherReadyEntries)
 
   refUpdates.foreach({ ref =>
     // Row-bus effects on pending references
@@ -1028,7 +1062,7 @@ class HBMModel(cfg: HBMModelConfig)(implicit p: Parameters)
 
   newReference.bits.mayPRE :=
     Mux(
-      io.mmReg.openPagePolicy,
+      io.openPagePolicy,
       newRefColBankMatch && memReqDone && !otherReadyEntries ||
         !bankHasReadyEntries(Cat(newReference.bits.pcAddr, newReference.bits.bankAddr)) &&
         !(selectedRowCmd === cmd_pre && newRefRowBankMatch),
@@ -1073,29 +1107,133 @@ class HBMModel(cfg: HBMModelConfig)(implicit p: Parameters)
   backend.io.tCycle        := tCycle
   backend.io.newRead.bits  := ReadResponseMetaData(p(NastiKey), columnArbiter.io.out.bits.xaction)
   backend.io.newRead.valid := memReqDone && !columnArbiter.io.out.bits.xaction.isWrite
-  backend.io.readLatency   := timings.tCAS + io.mmReg.backendLatency
+  backend.io.readLatency   := timings.tCAS + io.backendLatency
 
   // Writes are acknowledged immediately once issued
   backend.io.newWrite.bits  := WriteResponseMetaData(p(NastiKey), columnArbiter.io.out.bits.xaction)
   backend.io.newWrite.valid := memReqDone && columnArbiter.io.out.bits.xaction.isWrite
   backend.io.writeLatency   := 1.U
 
-  wResp <> backend.io.completedWrite
-  rResp <> backend.io.completedRead
+  io.completedWrite <> backend.io.completedWrite
+  io.completedRead  <> backend.io.completedRead
 
   // Dump both command streams (pseudo channel printed in the rank position).
   // Row bus: activate / precharge / refresh / refsb; column bus: read / write.
-  val rowCmdMonitor = Module(new CommandBusMonitor())
+  // Multi-channel configurations prefix every line with "ch<N>:" so the
+  // per-channel streams can be separated; single-channel output is unchanged.
+  val monitorPrefix = if (hbmKey.maxChannels > 1) s"ch$chIdx:" else ""
+
+  val rowCmdMonitor = Module(new CommandBusMonitor(monitorPrefix))
   rowCmdMonitor.io.cmd     := selectedRowCmd
   rowCmdMonitor.io.rank    := rowPC
   rowCmdMonitor.io.bank    := rowBank
   rowCmdMonitor.io.row     := cmdRow
   rowCmdMonitor.io.autoPRE := false.B
 
-  val colCmdMonitor = Module(new CommandBusMonitor())
+  val colCmdMonitor = Module(new CommandBusMonitor(monitorPrefix))
   colCmdMonitor.io.cmd     := selectedColCmd
   colCmdMonitor.io.rank    := colPC
   colCmdMonitor.io.bank    := colBank
   colCmdMonitor.io.row     := 0.U
   colCmdMonitor.io.autoPRE := casAutoPRE
+}
+
+// ============================================================================
+// The timing model
+// ============================================================================
+
+class HBMModelIO(val cfg: HBMModelConfig)(implicit p: Parameters) extends TimingModelIO()(p) {
+  val mmReg = new HBMMMRegIO(cfg)
+}
+
+class HBMModel(cfg: HBMModelConfig)(implicit p: Parameters)
+    extends TimingModel(cfg)(p)
+    with HasDRAMMASConstants {
+
+  val longName = "HBM2 Pseudo-Channel First-Ready FCFS MAS"
+  def printTimingModelGenerationConfig: Unit = {}
+
+  /** ************************** CHISEL BEGINS ********************************
+    */
+  lazy val io = IO(new HBMModelIO(cfg))
+
+  val hbmKey    = cfg.hbmKey
+  val nChannels = hbmKey.maxChannels
+
+  // Shared front-end: the single AXI4 port bounds request-acceptance
+  // bandwidth to one transaction per cycle regardless of channel count.
+  val xactionScheduler = Module(new UnifiedFIFOXactionScheduler(p(NastiKey), cfg.transactionQueueDepth, cfg))
+  xactionScheduler.io.req          <> nastiReq
+  xactionScheduler.io.pendingAWReq := pendingAWReq.value
+  xactionScheduler.io.pendingWReq  := pendingWReq.value
+
+  // Decode the next transaction's HBM coordinates once, then dispatch it to
+  // the channel selected by the (runtime-programmable) chAddr bits. The
+  // isReady / mayPRE flags depend on channel-local scheduler state, so the
+  // owning channel recomputes them at acceptance time.
+  val newReference = Wire(Decoupled(new HBMEntry(p(NastiKey), cfg)))
+  newReference.valid := xactionScheduler.io.nextXaction.valid
+  newReference.bits.decode(xactionScheduler.io.nextXaction.bits, io.mmReg)
+  newReference.bits.isReady := false.B // recomputed by the owning channel
+  newReference.bits.mayPRE  := false.B // recomputed by the owning channel
+
+  // Channel select: constant 0 in single-channel configurations (whose
+  // decode and register set are unchanged), programmable otherwise.
+  val chSel = io.mmReg.chAddr
+    .map(_.getSubAddr(xactionScheduler.io.nextXaction.bits.addr))
+    .getOrElse(0.U)
+
+  val channels = Seq.tabulate(nChannels) { i => Module(new HBMChannelScheduler(cfg, i)) }
+  channels.zipWithIndex.foreach { case (channel, i) =>
+    channel.io.newReference.valid := newReference.valid && chSel === i.U
+    channel.io.newReference.bits  := newReference.bits
+
+    channel.io.timings             := io.mmReg.hbmTimings
+    channel.io.openPagePolicy      := io.mmReg.openPagePolicy
+    channel.io.perBankRefresh      := io.mmReg.perBankRefresh
+    channel.io.schedulerWindowSize := io.mmReg.schedulerWindowSize
+    channel.io.pcsInUse            := io.mmReg.pcAddr.maskToOH()
+    channel.io.backendLatency      := io.mmReg.backendLatency
+    channel.io.tCycle              := tCycle
+  }
+  newReference.ready                    := VecInit(channels.map(_.io.newReference.ready))(chSel)
+  xactionScheduler.io.nextXaction.ready := newReference.ready
+
+  // --------------------------------------------------------------------
+  // Optional request trace (cfg.requestTrace): one CSV line per memory
+  // transaction as it is accepted into a channel's scheduler, using the
+  // exact same runtime-programmable decode the scheduler itself uses. Format:
+  //   HBMREQ,<tCycle>,<isWrite>,<addr hex>,<axi id>,<axi len>,
+  //          <channel>,<pseudo channel>,<bank group>,<bank>,<row hex>
+  // Purely observational: no state, no effect on newReference readiness.
+  // --------------------------------------------------------------------
+  if (cfg.requestTrace) {
+    when(newReference.fire) {
+      printf(
+        "HBMREQ,%d,%d,%x,%d,%d,%d,%d,%d,%d,%x\n",
+        tCycle,
+        newReference.bits.xaction.isWrite,
+        xactionScheduler.io.nextXaction.bits.addr,
+        newReference.bits.xaction.id,
+        newReference.bits.xaction.len,
+        chSel,
+        newReference.bits.pcAddr,
+        newReference.bits.bankGroupAddr,
+        newReference.bits.bankAddr,
+        newReference.bits.rowAddr,
+      )
+    }
+  }
+
+  // Merge per-channel completions onto the shared AXI4 response channels.
+  // Responses drain at one per cycle (the AXI4 port's bandwidth); channels
+  // with simultaneously-completed transactions queue them in their own
+  // backend pipes, so one channel's completions never stall another
+  // channel's command scheduling.
+  val readCompletionArb  = Module(new RRArbiter(new ReadResponseMetaData(p(NastiKey)), nChannels))
+  val writeCompletionArb = Module(new RRArbiter(new WriteResponseMetaData(p(NastiKey)), nChannels))
+  readCompletionArb.io.in.zip(channels).foreach { case (in, channel) => in <> channel.io.completedRead }
+  writeCompletionArb.io.in.zip(channels).foreach { case (in, channel) => in <> channel.io.completedWrite }
+  rResp <> readCompletionArb.io.out
+  wResp <> writeCompletionArb.io.out
 }

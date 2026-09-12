@@ -42,6 +42,7 @@ def main():
                 "cycle": int(r["cycle"]),
                 "rw": r["rw"],
                 "addr": int(r["addr"], 16),
+                "ch": int(r.get("channel", 0)),
                 "pc": int(r["pc"]),
                 "bg": int(r["bank_group"]),
                 "bank": int(r["bank"]),
@@ -63,16 +64,17 @@ def main():
     def describe(tag, seg):
         reads = sum(1 for r in seg if r["rw"] == "R")
         writes = len(seg) - reads
+        chans = Counter(r["ch"] for r in seg)
         pcs = Counter(r["pc"] for r in seg)
         bgs = Counter(r["bg"] for r in seg)
         banks = Counter(r["bank"] for r in seg)
         rowc = Counter(r["row"] for r in seg)
         uniq = len({r["addr"] for r in seg})
-        # request-level row switches per (pc,bg,bank)
+        # request-level row switches per (ch,pc,bg,bank)
         last_row = {}
         switches = 0
         for r in seg:
-            key = (r["pc"], r["bg"], r["bank"])
+            key = (r["ch"], r["pc"], r["bg"], r["bank"])
             if key in last_row and last_row[key] != r["row"]:
                 switches += 1
             last_row[key] = r["row"]
@@ -80,6 +82,7 @@ def main():
         print(f"{tag}: {len(seg)} reqs (R={reads} W={writes}) "
               f"cycles {seg[0]['cycle']}..{seg[-1]['cycle']} (span {span}) "
               f"uniq_addrs={uniq}")
+        print(f"    ch={dict(sorted(chans.items()))}")
         print(f"    pc={dict(sorted(pcs.items()))}")
         print(f"    bg={dict(sorted(bgs.items()))}")
         print(f"    bank={dict(sorted(banks.items()))}")

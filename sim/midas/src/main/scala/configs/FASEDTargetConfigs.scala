@@ -94,6 +94,20 @@ class WithHBM2FRFCFS(windowSize: Int, queueDepth: Int)
       )
     })
 
+// Sets the number of independent HBM channels modeled by the HBM timing
+// model (per-channel schedulers and timing state inside one HBMModel
+// instance; see HBMModel.scala). Layer *in front of* a config that sets
+// HBMOrganizationKey (e.g. WithDefaultMemModel / HBM2FRFCFS16GBDualPC).
+class WithHBMChannels(n: Int)
+    extends Config((_, _, up) => { case HBMOrganizationKey =>
+      up(HBMOrganizationKey).copy(maxChannels = n)
+    })
+
+// Named alias so quad-channel HBM can be requested in underscore-composed
+// PLATFORM_CONFIG strings, e.g.:
+//   WithHBMQuadChannel_HBM2FRFCFS16GBDualPC_BaseF2Config
+class WithHBMQuadChannel extends WithHBMChannels(4)
+
 // Enables the per-request CSV trace ("HBMREQ,..." lines on metasim stdout)
 // on an already-selected HBM memory model. Layer *in front of* a config that
 // sets MemModelKey to an HBMModelConfig, e.g.:
@@ -166,5 +180,15 @@ class HBM2FRFCFS16GBDualPC
 class HBM2FRFCFS16GBDualPCLLC4MB
     extends Config(
       new WithLLCModel(4096, 8) ++
+        new HBM2FRFCFS16GBDualPC
+    )
+
+// As HBM2FRFCFS16GBDualPC, but modeling four independent HBM channels
+// (four per-channel schedulers inside one HBMModel). The channel decode is
+// runtime-programmable (mm_chAddr_* registers); the default is a contiguous
+// partition with the channel index directly above one channel's capacity.
+class HBM2FRFCFS16GBQuadChannel
+    extends Config(
+      new WithHBMQuadChannel ++
         new HBM2FRFCFS16GBDualPC
     )

@@ -12,11 +12,15 @@ bus). In a verilator metasim their printfs land in the simulator log
     read(      pc, bank, col, autoPRE, burstChop); // cycle          (column bus)
     write(     pc, bank, col, autoPRE, burstChop, mask, data); // cycle (column bus)
 
+In multi-channel configurations every line is prefixed with `ch<N>:` (each
+channel has its own pair of command buses / monitors); unprefixed lines are
+reported as channel 0.
+
 `nop(n);` filler lines are ignored. The `rank` position of the DDR3-style
 monitor holds the HBM pseudo-channel.
 
 Output: CSV with one command per line:
-    cycle,cmd,pc,bankgroup,bank,bank_in_group,row,autopre
+    cycle,cmd,channel,pc,bankgroup,bank,bank_in_group,row,autopre
 
 Bank-group decode matches HBMEntry: the group lives in the LOW bankGroupBits
 of the bank address (bg = bank & (groups-1); bank_in_group = bank >> groupBits).
@@ -30,6 +34,7 @@ import sys
 # Chisel %d pads with spaces; %x prints hex.
 NUM = r"\s*(\d+)"
 HEX = r"\s*([0-9a-fA-F]+)"
+CHAN_RE = re.compile(r"ch(\d+):")
 PATTERNS = [
     ("ACT", re.compile(rf"activate\({NUM},{NUM},{NUM}\); //{NUM}")),
     ("PRE", re.compile(rf"precharge\({NUM},{NUM},{NUM}\); //{NUM}")),
@@ -44,6 +49,8 @@ def parse_lines(lines, bank_groups=4):
     """Yield dicts, one per HBM command found in the log."""
     group_bits = bank_groups.bit_length() - 1
     for line in lines:
+        chan_m = CHAN_RE.search(line)
+        channel = int(chan_m.group(1)) if chan_m else 0
         for cmd, pat in PATTERNS:
             m = pat.search(line)
             if not m:
@@ -73,6 +80,7 @@ def parse_lines(lines, bank_groups=4):
             yield {
                 "cycle": cycle,
                 "cmd": cmd,
+                "channel": channel,
                 "pc": pc,
                 "bankgroup": -1 if bank < 0 else bank & (bank_groups - 1),
                 "bank": bank,
@@ -95,7 +103,7 @@ def main():
 
     out = sys.stdout if args.output == "-" else open(args.output, "w", newline="")
     w = csv.DictWriter(
-        out, fieldnames=["cycle", "cmd", "pc", "bankgroup", "bank", "bank_in_group", "row", "autopre"])
+        out, fieldnames=["cycle", "cmd", "channel", "pc", "bankgroup", "bank", "bank_in_group", "row", "autopre"])
     w.writeheader()
     for c in cmds:
         w.writerow(c)

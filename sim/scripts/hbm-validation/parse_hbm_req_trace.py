@@ -4,14 +4,17 @@
 The HBM model (built with WithHBMRequestTrace / HBMF2ReqTraceConfig) prints
 one line per memory transaction accepted by its scheduler:
 
-    HBMREQ,<tCycle>,<isWrite>,<addr hex>,<axi id>,<axi len>,<pc>,<bg>,<bank>,<row hex>
+    HBMREQ,<tCycle>,<isWrite>,<addr hex>,<axi id>,<axi len>,<channel>,<pc>,<bg>,<bank>,<row hex>
 
-pc / bg / bank / row are the model's own runtime-programmable decode of the
-address (the same values the scheduler uses), so they are authoritative for
-the mapping the run was actually configured with. This script additionally
-derives the column (line-within-row) and byte offset from the address, which
-the hardware does not decode explicitly, using the same mask/offset scheme as
-the model's +mm_bankAddr/pcAddr/rowAddr plusargs.
+The older single-channel format without the <channel> field is also accepted
+(channel is reported as 0).
+
+channel / pc / bg / bank / row are the model's own runtime-programmable
+decode of the address (the same values the scheduler uses), so they are
+authoritative for the mapping the run was actually configured with. This
+script additionally derives the column (line-within-row) and byte offset from
+the address, which the hardware does not decode explicitly, using the same
+mask/offset scheme as the model's +mm_bankAddr/pcAddr/rowAddr plusargs.
 
 Defaults correspond to the model's default layout for the fasedtests fuzzer:
   [5:0] byte offset | [9:6] column | [13:10] bank | [14] PC | [21:15] row
@@ -22,14 +25,16 @@ import csv
 import re
 import sys
 
+# New format (with channel): 10 data fields; old format: 9 data fields.
 LINE_RE = re.compile(
     r"^HBMREQ,\s*(\d+),(\d),\s*([0-9a-fA-F]+),\s*(\d+),\s*(\d+),"
+    r"(?:\s*(\d+),)?"
     r"\s*(\d+),\s*(\d+),\s*(\d+),\s*([0-9a-fA-F]+)\s*$"
 )
 
 FIELDS = [
     "cycle", "rw", "addr", "axi_id", "axi_len",
-    "pc", "bank_group", "bank", "row", "col", "byte_offset",
+    "channel", "pc", "bank_group", "bank", "row", "col", "byte_offset",
 ]
 
 
@@ -51,7 +56,7 @@ def main():
             m = LINE_RE.match(line.strip())
             if not m:
                 continue
-            cycle, isw, addr, axi_id, axi_len, pc, bg, bank, row = m.groups()
+            cycle, isw, addr, axi_id, axi_len, ch, pc, bg, bank, row = m.groups()
             addr_i = int(addr, 16)
             rows.append({
                 "cycle":       int(cycle),
@@ -59,6 +64,7 @@ def main():
                 "addr":        f"0x{addr_i:x}",
                 "axi_id":      int(axi_id),
                 "axi_len":     int(axi_len),
+                "channel":     int(ch) if ch is not None else 0,
                 "pc":          int(pc),
                 "bank_group":  int(bg),
                 "bank":        int(bank),

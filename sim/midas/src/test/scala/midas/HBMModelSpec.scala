@@ -53,6 +53,12 @@ class HBMModelSpec extends AnyFlatSpec with ElaborationUtils {
     elaborateAndLower(new HBMModel(hbmConfig))
   }
 
+  it should "elaborate and lower to Verilog with four channels" in {
+    elaborateAndLower(
+      new HBMModel(hbmConfig.copy(hbmKey = hbmConfig.hbmKey.copy(maxChannels = 4), requestTrace = true))
+    )
+  }
+
   it should "have complete HBM2 timing tables" in {
     val timings = new HBMProgrammableTimings()
     val fields  = timings.registers.map { case (elem, _) => timings.getName(elem) }.toSet
