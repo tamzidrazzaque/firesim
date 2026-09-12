@@ -59,15 +59,16 @@ platform config layered with `firesim.configs.WithHBMRequestTrace` — makes the
 HBM model print one line per memory transaction accepted by its scheduler:
 
 ```
-HBMREQ,<tCycle>,<isWrite>,<addr hex>,<axi id>,<axi len>,<pc>,<bg>,<bank>,<row hex>
+HBMREQ,<tCycle>,<isWrite>,<addr hex>,<axi id>,<axi len>,<channel>,<pc>,<bg>,<bank>,<row hex>
 ```
 
-The pc/bg/bank/row fields are the model's own runtime-programmable decode of
-the address, i.e. exactly what the scheduler uses. Each FASED instance is one
-memory channel, so this is inherently a single-channel request trace. The
-monitor is elaboration-gated (`HBMModelConfig.requestTrace`), adds no state,
-and exerts no backpressure. Convert a metasim log into a clean CSV (with the
-derived column and byte offset) using:
+The channel/pc/bg/bank/row fields are the model's own runtime-programmable
+decode of the address, i.e. exactly what the scheduler uses (traces produced
+before multi-channel support lack the `<channel>` field; the parser accepts
+both formats and reports channel 0). The monitor is elaboration-gated
+(`HBMModelConfig.requestTrace`), adds no state, and exerts no backpressure.
+Convert a metasim log into a clean CSV (with the derived column and byte
+offset) using:
 
 ```bash
 ./scripts/hbm-validation/parse_hbm_req_trace.py metasim.log -o reqs.csv
@@ -88,6 +89,42 @@ read-write mix, row switches) can be computed from that CSV with:
 The `--gap` heuristic segments the request stream on idle gaps, which for the
 Radiance MemPerf traffic-generator target correspond to the lane-barrier
 between traffic patterns.
+
+## Multi-channel HBM
+
+`firesim.configs.WithHBMChannels(n)` (alias `WithHBMQuadChannel` for n = 4)
+makes one `HBMModel` instance model n fully independent HBM channels: each
+channel owns its reference window, FR-FCFS row/column scheduling, PC / bank
+group / bank timing trackers, refresh state, command buses, and completion
+pipes (`HBMChannelScheduler` in `HBMModel.scala`). The channels share only
+the AXI4 front-end transaction queue and the response arbiters. The channel
+select is runtime-programmable (`+mm_chAddr_offset` / `+mm_chAddr_mask`,
+only present in multi-channel builds); the default is a contiguous partition
+with the channel index directly above one channel's capacity.
+
+fasedtests platform configs: `HBMF2QuadChConfig` /
+`HBMF2QuadChReqTraceConfig`. Directed target config `FuzzChannelBoundaries`
+fuzzes exactly the first and last 64B line of every 1 MiB channel partition
+of the 22-bit fuzzer space (channel bits [21:20]).
+
+Multi-channel command traces prefix every monitor line with `ch<N>:`;
+`parse_fased_trace.py` turns that into a `channel` CSV column, and
+`check_trace_ramulator.py` replays each channel into its own Ramulator
+device instance (HBM channels share no timing state, so per-channel
+legality is the correct check). Request-to-channel routing in an HBMREQ
+trace is validated against the programmed partition with:
+
+```bash
+./scripts/hbm-validation/check_channel_routing.py reqs.csv --offset 20 --mask 3
+```
+
+Runtime configs `hbm2-FRFCFS-2400-{OP-REFab,OP-REFSB}-4ch-fuzzer.conf`
+partition the fuzzer space as [5:0] offset | [9:6] col | [13:10] bank |
+[14] PC | [19:15] row (channel-local) | [21:20] channel;
+`hbm2-FRFCFS-2400-OP-REFab-4ch-radiance.conf` instead puts the channel bits
+at [19:18] (256 KiB partitions) so the Radiance MemPerf 1 MiB footprint
+exercises all four channels, keeping the row decode identical to the
+single-channel config.
 
 ## Radiance -> HBM integrated run (chipyard graphics)
 
