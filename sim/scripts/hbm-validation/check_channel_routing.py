@@ -57,8 +57,12 @@ def main():
             hi = addr if hi is None else max(hi, addr)
 
     total = sum(rd + wr for rd, wr in counts.values())
-    size = (f"{region // (1 << 20)} MiB" if region >= (1 << 20)
-            else f"{region // (1 << 10)} KiB")
+    if region >= (1 << 20):
+        size = f"{region // (1 << 20)} MiB"
+    elif region >= (1 << 10):
+        size = f"{region // (1 << 10)} KiB"
+    else:
+        size = f"{region} B"
     print(f"\n{args.csvfile}: {total} requests, partition = "
           f"addr[{args.offset + args.mask.bit_length() - 1}:{args.offset}] "
           f"({size} per channel), {mismatches} mismatches")
