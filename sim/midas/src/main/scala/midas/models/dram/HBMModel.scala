@@ -796,16 +796,47 @@ class HBMPseudoChannelStateTracker(key: HBMOrganizationParams)
   io.pc.bgCanACT.zip(bgNextLegalACT).foreach { case (out, ctr) => out := ctr.io.idle }
 }
 
+/** If this FASED instance's AXI slave is address-striped, the fixed low bits
+  * of that address set are the memory-port index. A contiguous slave (the
+  * historical one-channel edge) has no such hole and returns None, so command
+  * traces stay byte-identical.
+  *
+  * Four independent FASED instances of a 1-channel HBMModel, each tagged this
+  * way, are four channels of one logical HBM: FireSim groups them by
+  * memoryRegionName onto one functional DRAM. They are not four separate
+  * devices.
+  */
+object FasedStripePort {
+  def apply()(implicit p: Parameters): Option[Int] =
+    p(FasedAXI4Edge).flatMap(_.address.headOption).flatMap { as =>
+      val width = as.mask.bitLength
+      if (width <= 0 || as.mask < 0) None
+      else {
+        val hole = (~as.mask) & ((BigInt(1) << width) - 1)
+        if (hole == 0) None
+        else Some(((as.base & hole) >> hole.lowestSetBit).toInt)
+      }
+    }
+}
+
 // ============================================================================
 // Per-channel scheduler
 // ============================================================================
 // One fully independent HBM channel: its own reference window, FR-FCFS
 // column/row command scheduling, pseudo-channel / bank-group / bank timing
 // state, refresh state, command buses, command-bus monitors, and completion
-// latency pipes (DRAMBackend). Channels share nothing but the AXI4 front-end
-// that dispatches requests to them and the response arbiters that merge
-// their completions, so references resident in different channels are
-// scheduled and timed completely independently.
+// latency pipes (DRAMBackend).
+//
+// Future PARE seam (not implemented): PARE will sit in front of this module
+// and issue row/column DRAM commands itself. The transaction queue, FR-FCFS
+// reference window, ACT/PRE/RD/WR selection, and refresh command arbitration
+// in this scheduler are the pieces that move out. Bank/BG/PC timing counters,
+// the tFAW window, and the command-legality checks stay as the HBM device
+// model. Until that exists, this scheduler is the memory controller.
+//
+// The aggregate multi-channel HBMModel still shares one AXI frontend. The
+// Radiance 4-path integration does not use that frontend: each L2/MC port
+// gets its own 1-channel FASED instance so the paths are not serialized.
 
 class HBMChannelSchedulerIO(val cfg: HBMModelConfig)(implicit val p: Parameters) extends Bundle {
   // Decoded reference dispatched by the shared front-end; only asserted
@@ -1120,8 +1151,12 @@ class HBMChannelScheduler(cfg: HBMModelConfig, chIdx: Int)(implicit p: Parameter
   // Dump both command streams (pseudo channel printed in the rank position).
   // Row bus: activate / precharge / refresh / refsb; column bus: read / write.
   // Multi-channel configurations prefix every line with "ch<N>:" so the
-  // per-channel streams can be separated; single-channel output is unchanged.
-  val monitorPrefix = if (hbmKey.maxChannels > 1) s"ch$chIdx:" else ""
+  // per-channel streams can be separated. A 1-channel model on a striped
+  // FASED port uses the stripe index instead. A contiguous one-channel edge
+  // leaves the historical format unchanged.
+  val monitorPrefix =
+    if (hbmKey.maxChannels > 1) s"ch$chIdx:"
+    else FasedStripePort().map(i => s"ch$i:").getOrElse("")
 
   val rowCmdMonitor = Module(new CommandBusMonitor(monitorPrefix))
   rowCmdMonitor.io.cmd     := selectedRowCmd
@@ -1179,9 +1214,12 @@ class HBMModel(cfg: HBMModelConfig)(implicit p: Parameters)
 
   // Channel select: constant 0 in single-channel configurations (whose
   // decode and register set are unchanged), programmable otherwise.
+  // On a striped FASED port the reported id is the memory-port index, which
+  // is constant for this instance (the port already filtered the address).
   val chSel = io.mmReg.chAddr
     .map(_.getSubAddr(xactionScheduler.io.nextXaction.bits.addr))
     .getOrElse(0.U)
+  val reportCh = FasedStripePort().map(_.U).getOrElse(chSel)
 
   val channels = Seq.tabulate(nChannels) { i => Module(new HBMChannelScheduler(cfg, i)) }
   channels.zipWithIndex.foreach { case (channel, i) =>
@@ -1216,7 +1254,7 @@ class HBMModel(cfg: HBMModelConfig)(implicit p: Parameters)
         xactionScheduler.io.nextXaction.bits.addr,
         newReference.bits.xaction.id,
         newReference.bits.xaction.len,
-        chSel,
+        reportCh,
         newReference.bits.pcAddr,
         newReference.bits.bankGroupAddr,
         newReference.bits.bankAddr,
