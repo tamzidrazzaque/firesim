@@ -112,6 +112,20 @@ class WithHBMQuadChannel extends WithHBMChannels(4)
 // on an already-selected HBM memory model. Layer *in front of* a config that
 // sets MemModelKey to an HBMModelConfig, e.g.:
 //   new WithHBMRequestTrace ++ new HBM2FRFCFS16GBDualPC ++ ...
+// Test-only. On a striped FASED port, drop the fixed path-select bits before
+// the per-channel HBM bank/row/column decode. Does not change routing.
+//   PLATFORM_CONFIG=WithHBMStripeCompact_WithHBMRequestTrace_HBM2FRFCFS16GBDualPC_BaseF2Config
+class WithHBMStripeCompact
+    extends Config((_, _, up) => { case MemModelKey =>
+      up(MemModelKey) match {
+        case hbm: HBMModelConfig => hbm.copy(compactStripe = true)
+        case other               =>
+          throw new IllegalArgumentException(
+            s"WithHBMStripeCompact requires an HBMModelConfig, got: ${other.getClass.getName}"
+          )
+      }
+    })
+
 class WithHBMRequestTrace
     extends Config((_, _, up) => { case MemModelKey =>
       up(MemModelKey) match {

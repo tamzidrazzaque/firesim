@@ -296,6 +296,11 @@ case class HBMModelConfig(
   // transaction accepted by the scheduler (metasim only; adds no state and
   // no backpressure). See HBMModel.requestTrace below for the format.
   requestTrace:          Boolean = false,
+  // Test-only. When this FASED port's address set is striped, drop those
+  // fixed path bits and shift the higher bits down before PC/bank/row decode.
+  // The AXI address, routing, and functional memory are unchanged. Default
+  // off: Architecture 1 decodes the original global address.
+  compactStripe:         Boolean = false,
   params:                BaseParams,
 ) extends HBMBaseConfig {
   def elaborate()(implicit p: Parameters): HBMModel = Module(new HBMModel(this))
@@ -419,12 +424,12 @@ class HBMEntry(nastiParams: NastiParameters, cfg: HBMBaseConfig)(implicit p: Par
   def bankGroupAddr:   UInt = bankAddr(cfg.hbmKey.bankGroupBits - 1, 0)
   def bankGroupAddrOH: UInt = UIntToOH(bankGroupAddr)
 
-  def decode(from: XactionSchedulerEntry, mmReg: HBMMMRegIO): Unit = {
+  def decode(from: XactionSchedulerEntry, mmReg: HBMMMRegIO, addr: UInt): Unit = {
     xaction    := from.xaction
-    bankAddr   := mmReg.bankAddr.getSubAddr(from.addr)
+    bankAddr   := mmReg.bankAddr.getSubAddr(addr)
     bankAddrOH := UIntToOH(bankAddr)
-    rowAddr    := mmReg.rowAddr.getSubAddr(from.addr)
-    pcAddr     := mmReg.pcAddr.getSubAddr(from.addr)
+    rowAddr    := mmReg.rowAddr.getSubAddr(addr)
+    pcAddr     := mmReg.pcAddr.getSubAddr(addr)
     pcAddrOH   := UIntToOH(pcAddr)
   }
 
@@ -807,16 +812,32 @@ class HBMPseudoChannelStateTracker(key: HBMOrganizationParams)
   * devices.
   */
 object FasedStripePort {
-  def apply()(implicit p: Parameters): Option[Int] =
-    p(FasedAXI4Edge).flatMap(_.address.headOption).flatMap { as =>
+  /** Bits that are constant on this FASED port (0 if the slave is contiguous). */
+  def hole()(implicit p: Parameters): BigInt =
+    p(FasedAXI4Edge).flatMap(_.address.headOption).map { as =>
       val width = as.mask.bitLength
-      if (width <= 0 || as.mask < 0) None
-      else {
-        val hole = (~as.mask) & ((BigInt(1) << width) - 1)
-        if (hole == 0) None
-        else Some(((as.base & hole) >> hole.lowestSetBit).toInt)
-      }
+      if (width <= 0 || as.mask < 0) BigInt(0)
+      else (~as.mask) & ((BigInt(1) << width) - 1)
+    }.getOrElse(BigInt(0))
+
+  def apply()(implicit p: Parameters): Option[Int] = {
+    val h = hole()
+    if (h == 0) None
+    else {
+      val base = p(FasedAXI4Edge).get.address.head.base
+      Some(((base & h) >> h.lowestSetBit).toInt)
     }
+  }
+
+  /** Drop hole bits and pack the remaining bits toward LSB. Identity if hole is 0. */
+  def compact(addr: UInt)(implicit p: Parameters): UInt = {
+    val h = hole()
+    if (h == 0) addr
+    else {
+      val kept = (0 until addr.getWidth).filter(i => ((h >> i) & 1) == 0)
+      Cat(kept.reverse.map(i => addr(i)))
+    }
+  }
 }
 
 // ============================================================================
@@ -1208,7 +1229,9 @@ class HBMModel(cfg: HBMModelConfig)(implicit p: Parameters)
   // owning channel recomputes them at acceptance time.
   val newReference = Wire(Decoupled(new HBMEntry(p(NastiKey), cfg)))
   newReference.valid := xactionScheduler.io.nextXaction.valid
-  newReference.bits.decode(xactionScheduler.io.nextXaction.bits, io.mmReg)
+  val rawAddr    = xactionScheduler.io.nextXaction.bits.addr
+  val decodeAddr = if (cfg.compactStripe) FasedStripePort.compact(rawAddr) else rawAddr
+  newReference.bits.decode(xactionScheduler.io.nextXaction.bits, io.mmReg, decodeAddr)
   newReference.bits.isReady := false.B // recomputed by the owning channel
   newReference.bits.mayPRE  := false.B // recomputed by the owning channel
 
