@@ -87,6 +87,14 @@ def main():
         print(f"    bg={dict(sorted(bgs.items()))}")
         print(f"    bank={dict(sorted(banks.items()))}")
         print(f"    rows={len(rowc)} distinct, row_switches={switches}")
+        for ch in sorted(chans):
+            sub = [r for r in seg if r["ch"] == ch]
+            print(f"    path{ch}: n={len(sub)} "
+                  f"R={sum(1 for r in sub if r['rw']=='R')} "
+                  f"W={sum(1 for r in sub if r['rw']=='W')} "
+                  f"pc={sorted({r['pc'] for r in sub})} "
+                  f"bg={sorted({r['bg'] for r in sub})} "
+                  f"banks={sorted({r['bank'] for r in sub})}")
 
     print(f"=== {len(rows)} requests, {len(segments)} segments "
           f"(gap >= {args.gap} cycles) ===")

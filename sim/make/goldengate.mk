@@ -34,6 +34,7 @@ $(simulator_verilog) $(simulator_xdc) $(header) $(fame_annos) &: $(FIRRTL_FILE) 
 		--no-dedup)
 	grep -sh ^ $(GENERATED_DIR)/firrtl_black_box_resource_files.f | \
 		xargs cat >> $(simulator_verilog) # Append blackboxes to FPGA wrapper, if any
+	python3 $(firesim_base_dir)/scripts/hbm-validation/reorder_fpnew_packages.py $(simulator_verilog)
 
 ####################################
 # Runtime-Configuration Generation #
