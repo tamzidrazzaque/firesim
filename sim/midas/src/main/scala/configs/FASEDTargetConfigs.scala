@@ -9,6 +9,7 @@ case object MemModelKey         extends Field[BaseConfig]
 case object BaseParamsKey       extends Field[BaseParams]
 case object LlcKey              extends Field[Option[LLCParams]]
 case object DramOrganizationKey extends Field[DramOrganizationParams]
+case object HBMOrganizationKey  extends Field[HBMOrganizationParams]
 
 // Instantiates an AXI4 memory model that executes (1 / clockDivision) of the frequency
 // of the RTL transformed model (Rocket Chip)
@@ -21,6 +22,16 @@ class WithDefaultMemModel
       case BaseParamsKey       => BaseParams(maxReads = 16, maxWrites = 16, beatCounters = true, llcKey = site(LlcKey))
 
       case MemModelKey => new LatencyPipeConfig(site(BaseParamsKey))
+
+      // Only used if an HBM model is requested. One HBM2 channel in
+      // pseudo-channel mode: 2 PCs x 4 bank groups x 4 banks.
+      case HBMOrganizationKey =>
+        HBMOrganizationParams(
+          maxPseudoChannels = 2,
+          maxBankGroups     = 4,
+          banksPerGroup     = 4,
+          channelSize       = BigInt(1) << 34,
+        )
     })
 
 /** ***************************************************************************** Memory-timing model configuration
@@ -70,6 +81,48 @@ class WithDDR3FRFCFS(windowSize: Int, queueDepth: Int)
       )
     })
 
+// Instantiates an HBM2 (pseudo-channel mode) model with a FR-FCFS memory
+// access scheduler. Timings are runtime-programmable; defaults are the
+// HBM2-2400 table (see HBMTimingTables for alternates, including PARE).
+class WithHBM2FRFCFS(windowSize: Int, queueDepth: Int)
+    extends Config((site, _, _) => { case MemModelKey =>
+      new HBMModelConfig(
+        schedulerWindowSize   = windowSize,
+        transactionQueueDepth = queueDepth,
+        hbmKey                = site(HBMOrganizationKey),
+        params                = site(BaseParamsKey),
+      )
+    })
+
+// Sets the number of independent HBM channels modeled by the HBM timing
+// model (per-channel schedulers and timing state inside one HBMModel
+// instance; see HBMModel.scala). Layer *in front of* a config that sets
+// HBMOrganizationKey (e.g. WithDefaultMemModel / HBM2FRFCFS16GBDualPC).
+class WithHBMChannels(n: Int)
+    extends Config((_, _, up) => { case HBMOrganizationKey =>
+      up(HBMOrganizationKey).copy(maxChannels = n)
+    })
+
+// Named alias so quad-channel HBM can be requested in underscore-composed
+// PLATFORM_CONFIG strings, e.g.:
+//   WithHBMQuadChannel_HBM2FRFCFS16GBDualPC_BaseF2Config
+class WithHBMQuadChannel extends WithHBMChannels(4)
+
+// Enables the per-request CSV trace ("HBMREQ,..." lines on metasim stdout)
+// on an already-selected HBM memory model. Layer *in front of* a config that
+// sets MemModelKey to an HBMModelConfig, e.g.:
+//   new WithHBMRequestTrace ++ new HBM2FRFCFS16GBDualPC ++ ...
+class WithHBMRequestTrace
+    extends Config((_, _, up) => { case MemModelKey =>
+      up(MemModelKey) match {
+        case hbm: HBMModelConfig => hbm.copy(requestTrace = true)
+        case other               =>
+          throw new IllegalArgumentException(
+            s"WithHBMRequestTrace requires an HBMModelConfig, got: ${other.getClass.getName}"
+          )
+      }
+    })
+
 // Changes the functional model capacity limits
 class WithFuncModelLimits(maxReads: Int, maxWrites: Int)
     extends Config((_, _, up) => { case BaseParamsKey =>
@@ -115,4 +168,27 @@ class FRFCFS16GBQuadRankLLC4MB
     extends Config(
       new WithLLCModel(4096, 8) ++
         new FRFCFS16GBQuadRank
+    )
+
+// HBM2 - First-Ready FCFS models (one channel, dual pseudo-channel)
+class HBM2FRFCFS16GBDualPC
+    extends Config(
+      new WithFuncModelLimits(32, 32) ++
+        new WithHBM2FRFCFS(8, 8) ++
+        new WithDefaultMemModel
+    )
+class HBM2FRFCFS16GBDualPCLLC4MB
+    extends Config(
+      new WithLLCModel(4096, 8) ++
+        new HBM2FRFCFS16GBDualPC
+    )
+
+// As HBM2FRFCFS16GBDualPC, but modeling four independent HBM channels
+// (four per-channel schedulers inside one HBMModel). The channel decode is
+// runtime-programmable (mm_chAddr_* registers); the default is a contiguous
+// partition with the channel index directly above one channel's capacity.
+class HBM2FRFCFS16GBQuadChannel
+    extends Config(
+      new WithHBMQuadChannel ++
+        new HBM2FRFCFS16GBDualPC
     )

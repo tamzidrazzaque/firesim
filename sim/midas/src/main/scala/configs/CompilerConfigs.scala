@@ -107,6 +107,14 @@ class BaseXilinxAlveoU250Config
         new midas.XilinxAlveoU250Config
     )
 
+// One-channel HBM2 FR-FCFS timing model in front of the U250's single DDR
+// controller. Functional bytes stay in that DDR; the HBM model is timing only.
+class HBM2FRFCFS16GBDualPC_BaseXilinxAlveoU250Config
+    extends Config(
+      new HBM2FRFCFS16GBDualPC ++
+        new BaseXilinxAlveoU250Config
+    )
+
 class BaseXilinxAlveoU280Config
     extends Config(
       new WithDefaultMemModel ++

@@ -53,6 +53,7 @@ foreach addFile [list \
 }
 
 set desired_host_frequency $ifrequency
+set_property include_dirs [list ${root_dir}/design] [get_filesets sources_1]
 set strategy $istrategy
 
 # Loading create_bd.tcl
