@@ -36,6 +36,7 @@ from buildtools.bitbuilder import F2BitBuilder
 from util.streamlogger import StreamLogger, InfoStreamLogger
 from util.filelineswap import file_line_swap
 from util.io import firesim_input
+from util.manager_ssh import get_manager_ssh_key_path
 
 from typing import Dict, Callable, Type, Optional, TypedDict, get_type_hints, Tuple, List
 
@@ -184,7 +185,7 @@ def managerinit(args: argparse.Namespace):
             "managerinit replace start",
             "managerinit replace end",
             bf_recipe_lines)
-    elif args.platform == 'vitis' or args.platform == 'xilinx_alveo_u250' or args.platform == 'xilinx_alveo_u280' or args.platform == 'xilinx_alveo_u200' or args.platform == 'xilinx_vcu118' or args.platform == 'rhsresearch_nitefury_ii':
+    elif args.platform == 'vitis' or args.platform == 'xilinx_alveo_u250' or args.platform == 'xilinx_alveo_u280' or args.platform == 'xilinx_alveo_u200' or args.platform == 'xilinx_vcu118' or args.platform == 'rhsresearch_nitefury_ii' or args.platform == 'corigine_xb10':
         runfarm_default_file = "run-farm-recipes/externally_provisioned.yaml"
         with open(runfarm_default_file, "r") as f:
             rf_recipe_lines = f.readlines()
@@ -198,6 +199,7 @@ def managerinit(args: argparse.Namespace):
             'xilinx_alveo_u280': 'XilinxAlveoU280InstanceDeployManager',
             'xilinx_vcu118': 'XilinxVCU118InstanceDeployManager',
             'rhsresearch_nitefury_ii': 'RHSResearchNitefuryIIInstanceDeployManager',
+            'corigine_xb10': 'CorigineXB10InstanceDeployManager',
         }
         firesim_runs_dir = str(Path.home()) + "/FIRESIM_RUNS_DIR"
 
@@ -458,7 +460,7 @@ def main(args: argparse.Namespace) -> None:
     # we elastically spin instances up/down. we can easily get re-used IPs with
     # different keys. also, probably won't get MITM'd
     env.disable_known_hosts = True
-    env.key_filename = os.path.expanduser("~/firesim.pem") #rh: okay so /firesim.pem does work for infrasetup, need to bump paramiko though to support rsa2
+    env.key_filename = get_manager_ssh_key_path()
 
 
     rootLogger.info("FireSim Manager. Docs: https://docs.fires.im\nRunning: %s\n", str(args.task))

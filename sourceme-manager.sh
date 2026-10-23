@@ -51,6 +51,7 @@ fi
 
 # flag for scripts to check that this has been sourced
 export FIRESIM_SOURCED=1
+export FIRESIM_ENV_SOURCED=1
 
 # this is a prefix added to run farm names. change this to isolate run farms
 # if you have multiple copies of firesim

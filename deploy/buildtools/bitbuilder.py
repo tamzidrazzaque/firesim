@@ -8,12 +8,13 @@ import random
 import string
 import logging
 import os
+import shlex
 from fabric.api import prefix, local, run, env, lcd, parallel, settings  # type: ignore
 from fabric.contrib.console import confirm  # type: ignore
 from fabric.contrib.project import rsync_project  # type: ignore
 
 from util.streamlogger import InfoStreamLogger
-from util.export import create_export_string
+from util.export import FIRESIM_BUILD_ENV_VARS, create_export_string
 from awstools.afitools import firesim_tags_to_description, copy_afi_to_all_regions
 from awstools.awstools import (
     send_firesim_notification,
@@ -77,7 +78,7 @@ class BitBuilder(metaclass=abc.ABCMeta):
 
         deploy_dir = get_deploy_dir()
         with InfoStreamLogger("stdout"), prefix(f"cd {deploy_dir}/../"), prefix(
-            create_export_string({"RISCV", "PATH", "LD_LIBRARY_PATH"})
+            create_export_string(FIRESIM_BUILD_ENV_VARS)
         ), prefix("source sourceme-manager.sh --skip-ssh-setup"), InfoStreamLogger(
             "stdout"
         ), prefix(
@@ -93,7 +94,7 @@ class BitBuilder(metaclass=abc.ABCMeta):
 
         deploy_dir = get_deploy_dir()
         with InfoStreamLogger("stdout"), prefix(f"cd {deploy_dir}/../"), prefix(
-            create_export_string({"RISCV", "PATH", "LD_LIBRARY_PATH"})
+            create_export_string(FIRESIM_BUILD_ENV_VARS)
         ), prefix("source sourceme-manager.sh --skip-ssh-setup"), prefix("cd sim/"):
             run(self.build_config.make_recipe("driver", deploy_dir))
 
@@ -708,6 +709,10 @@ class XilinxAlveoBitBuilder(BitBuilder):
     def setup(self) -> None:
         return
 
+    def get_build_script_extra_args(self) -> str:
+        """Return platform-specific arguments for ``build-bitstream.sh``."""
+        return ""
+
     def cl_dir_setup(self, chisel_quintuplet: str, dest_build_dir: str) -> str:
         """Setup CL_DIR on build host.
 
@@ -822,7 +827,7 @@ class XilinxAlveoBitBuilder(BitBuilder):
 
         with InfoStreamLogger("stdout"), settings(warn_only=True):
             alveo_result = run(
-                f"{cl_dir}/build-bitstream.sh --cl_dir {cl_dir} --frequency {fpga_frequency} --strategy {build_strategy} --board {self.BOARD_NAME}"
+                f"{cl_dir}/build-bitstream.sh --cl_dir {cl_dir} --frequency {fpga_frequency} --strategy {build_strategy} --board {self.BOARD_NAME}{self.get_build_script_extra_args()}"
             )
             alveo_rc = alveo_result.return_code
 
@@ -926,6 +931,23 @@ class XilinxAlveoU250BitBuilder(XilinxAlveoBitBuilder):
     def __init__(self, build_config: BuildConfig, args: Dict[str, Any]) -> None:
         super().__init__(build_config, args)
         self.BOARD_NAME = "au250"
+
+
+class CorigineXB10BitBuilder(XilinxAlveoBitBuilder):
+    def __init__(self, build_config: BuildConfig, args: Dict[str, Any]) -> None:
+        super().__init__(build_config, args)
+        self.BOARD_NAME = "xb10"
+        parsed_args = args or {}
+        self.vivado_settings = parsed_args.get("vivado_settings")
+        if self.vivado_settings is not None and not isinstance(
+            self.vivado_settings, str
+        ):
+            raise ValueError("vivado_settings must be a path string or null")
+
+    def get_build_script_extra_args(self) -> str:
+        if not self.vivado_settings:
+            return ""
+        return f" --vivado-settings {shlex.quote(self.vivado_settings)}"
 
 
 class XilinxVCU118BitBuilder(XilinxAlveoBitBuilder):

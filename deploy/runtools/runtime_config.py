@@ -3,6 +3,7 @@ simulation tasks. """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import re
 from datetime import timedelta
 from time import strftime, gmtime
@@ -21,6 +22,8 @@ from uuid import uuid1
 from tempfile import TemporaryDirectory
 import hashlib
 import json
+import shlex
+import stat
 
 from awstools.awstools import aws_resource_names
 from awstools.afitools import (
@@ -42,7 +45,7 @@ from runtools.utils import is_on_aws
 from util.inheritors import inheritors
 from util.deepmerge import deep_merge
 from util.streamlogger import InfoStreamLogger
-from util.export import create_export_string
+from util.export import FIRESIM_BUILD_ENV_VARS, create_export_string
 from util.targetprojectutils import extra_target_project_make_args, resolve_path
 from buildtools.bitbuilder import get_deploy_dir
 from util.io import downloadURI
@@ -61,6 +64,42 @@ rootLogger = logging.getLogger()
 
 # from  https://github.com/pandas-dev/pandas/blob/96b036cbcf7db5d3ba875aac28c4f6a678214bfb/pandas/io/common.py#L73
 _RFC_3986_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9+\-+.]*://")
+_FASED_SETTING_PATTERN = re.compile(
+    r"^\+mm_([A-Za-z][A-Za-z0-9_]*)_([0-9]+)=([0-9]+)$"
+)
+_FASED_CONTROLLED_EXTRA_TOKEN_PATTERN = re.compile(
+    r"^[A-Za-z0-9_+.,:/=@%-]+$"
+)
+_SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+_ARTIFACT_SHA256_PLACEHOLDER_PATTERN = re.compile(
+    r"^__REPLACE_WITH_[A-Z0-9]+(?:_[A-Z0-9]+)*_SHA256__$"
+)
+
+
+@dataclass(frozen=True)
+class ArtifactSHA256Contract:
+    """Expected hashes for the two externally supplied FPGA artifacts."""
+
+    bitstream_tar: str
+    driver_tar: str
+
+
+@dataclass(frozen=True)
+class FASEDRuntimeProfile:
+    """A validated, content-addressed FASED runtime-profile contract."""
+
+    filename: str
+    sha256: str
+    model_ids: Tuple[int, ...]
+    settings_per_model: int
+
+    @property
+    def total_settings(self) -> int:
+        return len(self.model_ids) * self.settings_per_model
+
+    @property
+    def snapshot_filename(self) -> str:
+        return f".fased-runtime-profile-{self.sha256}.conf"
 
 
 class URIContainer:
@@ -126,12 +165,84 @@ class URIContainer:
 
         return (uri, destination)
 
+    def _expected_sha256(self, hwcfg: RuntimeHWConfig) -> Optional[str]:
+        contract = getattr(hwcfg, "artifact_sha256", None)
+        if contract is None:
+            return None
+        expected_sha256 = getattr(contract, self.hwcfg_prop)
+        if _SHA256_PATTERN.fullmatch(expected_sha256) is None:
+            raise RuntimeError(
+                f"HWDB entry {hwcfg.name} has an unresolved {self.hwcfg_prop} "
+                "SHA-256 placeholder"
+            )
+        return expected_sha256
+
+    def verify_local_artifact(self, destination: str, hwcfg: RuntimeHWConfig) -> None:
+        """Fail closed if a contracted cache entry is not the expected file."""
+        expected_sha256 = self._expected_sha256(hwcfg)
+        if expected_sha256 is None:
+            return
+
+        fd: Optional[int] = None
+        digest = hashlib.sha256()
+        try:
+            path_metadata = os.lstat(destination)
+            if stat.S_ISLNK(path_metadata.st_mode):
+                raise RuntimeError(
+                    f"Contracted {self.hwcfg_prop} cache path is a symlink: "
+                    f"{destination}"
+                )
+            if not stat.S_ISREG(path_metadata.st_mode):
+                raise RuntimeError(
+                    f"Contracted {self.hwcfg_prop} cache path is not a regular file: "
+                    f"{destination}"
+                )
+            flags = (
+                os.O_RDONLY
+                | getattr(os, "O_NOFOLLOW", 0)
+                | getattr(os, "O_NONBLOCK", 0)
+            )
+            fd = os.open(destination, flags)
+            metadata = os.fstat(fd)
+            if not stat.S_ISREG(metadata.st_mode):
+                raise RuntimeError(
+                    f"Contracted {self.hwcfg_prop} cache path is not a regular file: "
+                    f"{destination}"
+                )
+            if metadata.st_size == 0:
+                raise RuntimeError(
+                    f"Contracted {self.hwcfg_prop} cache file is empty: {destination}"
+                )
+            with os.fdopen(fd, "rb") as artifact:
+                fd = None
+                for chunk in iter(lambda: artifact.read(1024 * 1024), b""):
+                    digest.update(chunk)
+        except OSError as error:
+            raise RuntimeError(
+                f"Contracted {self.hwcfg_prop} cache path must be a readable, "
+                f"regular, non-symlink file: {destination}: {error}"
+            ) from error
+        finally:
+            if fd is not None:
+                os.close(fd)
+
+        actual_sha256 = digest.hexdigest()
+        if actual_sha256 != expected_sha256:
+            raise RuntimeError(
+                f"Contracted {self.hwcfg_prop} SHA-256 mismatch for {destination}: "
+                f"expected {expected_sha256}, got {actual_sha256}"
+            )
+
     def local_pre_download(
         self, local_dir: str, hwcfg: RuntimeHWConfig
     ) -> Optional[Tuple[str, str]]:
         """Cached download of the URI contained in this class to a user-specified
         destination folder. The destination name is a SHA256 hash of the URI.
         If the file exists this will NOT overwrite."""
+
+        # Reject unresolved hash placeholders before URI resolution, network,
+        # or filesystem mutation.
+        contracted = self._expected_sha256(hwcfg) is not None
 
         # resolve the URI and the path '/{dir}/{hash}' we should download to
         both = self._choose_path(local_dir, hwcfg)
@@ -143,7 +254,11 @@ class URIContainer:
         (uri, destination) = both
 
         # When it exists, return the same information, but skip the download
-        if Path(destination).exists():
+        destination_exists = (
+            os.path.lexists(destination) if contracted else Path(destination).exists()
+        )
+        if destination_exists:
+            self.verify_local_artifact(destination, hwcfg)
             rootLogger.debug(f"Skipping download of uri: '{uri}'")
             return (uri, destination)
 
@@ -151,6 +266,8 @@ class URIContainer:
             downloadURI(uri, destination)
         except FileNotFoundError as e:
             raise Exception(f"{self.hwcfg_prop} path '{uri}' was not found")
+
+        self.verify_local_artifact(destination, hwcfg)
 
         # return, this is not passed to rsync
         return (uri, destination)
@@ -161,6 +278,9 @@ class URIContainer:
         """Does not download. Returns the rsync path required to send an already downloaded
         URI to the runhost."""
 
+        # Fail on an unresolved hash before resolving or using its URI.
+        self._expected_sha256(hwcfg)
+
         # resolve the URI and the path '/{dir}/{hash}' we should download to
         both = self._choose_path(local_dir, hwcfg)
 
@@ -169,6 +289,10 @@ class URIContainer:
             return None
 
         (uri, destination) = both
+
+        # Revalidate immediately before handing this path to the rsync caller.
+        # The XB10 remote side independently checks the received bytes again.
+        self.verify_local_artifact(destination, hwcfg)
 
         # because the local file has a nonsense name (the hash)
         # we are required to specify the destination name to rsync
@@ -200,6 +324,8 @@ class RuntimeHWConfig:
     driver_type_message: str
     """User-specified, URI path to driver tarball"""
     driver_tar: Optional[str]
+    fased_runtime_profile: Optional[FASEDRuntimeProfile]
+    artifact_sha256: Optional[ArtifactSHA256Contract]
 
     """ A list of URIContainer objects, one for each URI that is able to be specified """
     uri_list: list[URIContainer]
@@ -284,11 +410,342 @@ class RuntimeHWConfig:
             )
 
         self.customruntimeconfig = hwconfig_dict["custom_runtime_config"]
+        self.fased_runtime_profile = (
+            self._load_fased_runtime_profile(hwconfig_dict["fased_runtime_profile"])
+            if "fased_runtime_profile" in hwconfig_dict
+            else None
+        )
+        self.artifact_sha256 = (
+            self._load_artifact_sha256(hwconfig_dict["artifact_sha256"])
+            if "artifact_sha256" in hwconfig_dict
+            else None
+        )
 
         self.additional_required_files = []
 
         self.uri_list.append(URIContainer("driver_tar", self.get_driver_tar_filename()))
         rootLogger.debug(f"RuntimeHWConfig self.platform {self.platform}")
+
+    def _load_artifact_sha256(self, raw_contract: Any) -> ArtifactSHA256Contract:
+        """Validate exact bitstream/driver artifact hashes from an HWDB entry."""
+        if not isinstance(raw_contract, dict):
+            raise ValueError(
+                f"HWDB entry {self.name} artifact_sha256 must be a mapping"
+            )
+
+        required_fields = {"bitstream_tar", "driver_tar"}
+        actual_fields = set(raw_contract)
+        if actual_fields != required_fields:
+            raise ValueError(
+                f"HWDB entry {self.name} artifact_sha256 fields must be exactly "
+                f"{sorted(required_fields)}; got {sorted(actual_fields)}"
+            )
+
+        values: Dict[str, str] = {}
+        for field in sorted(required_fields):
+            value = raw_contract[field]
+            is_hash = isinstance(value, str) and _SHA256_PATTERN.fullmatch(value)
+            is_placeholder = isinstance(
+                value, str
+            ) and _ARTIFACT_SHA256_PLACEHOLDER_PATTERN.fullmatch(value)
+            if not is_hash and not is_placeholder:
+                raise ValueError(
+                    f"HWDB entry {self.name} has an invalid {field} artifact SHA-256"
+                )
+            configured_uri = getattr(self, field)
+            if not isinstance(configured_uri, str) or not configured_uri:
+                raise ValueError(
+                    f"HWDB entry {self.name} artifact_sha256 requires {field}"
+                )
+            values[field] = value
+
+        return ArtifactSHA256Contract(**values)
+
+    def _load_fased_runtime_profile(
+        self, raw_contract: Any
+    ) -> FASEDRuntimeProfile:
+        """Validate a controlled FASED profile and bind it to its exact bytes."""
+        if not isinstance(raw_contract, dict):
+            raise ValueError(
+                f"HWDB entry {self.name} fased_runtime_profile must be a mapping"
+            )
+
+        required_fields = {"sha256", "model_ids", "settings_per_model"}
+        actual_fields = set(raw_contract)
+        if actual_fields != required_fields:
+            raise ValueError(
+                f"HWDB entry {self.name} fased_runtime_profile fields must be "
+                f"exactly {sorted(required_fields)}; got {sorted(actual_fields)}"
+            )
+
+        expected_sha256 = raw_contract["sha256"]
+        if not isinstance(expected_sha256, str) or re.fullmatch(
+            r"[0-9a-f]{64}", expected_sha256
+        ) is None:
+            raise ValueError(
+                f"HWDB entry {self.name} has an invalid FASED profile SHA-256"
+            )
+
+        raw_model_ids = raw_contract["model_ids"]
+        if not isinstance(raw_model_ids, list) or any(
+            type(model_id) is not int for model_id in raw_model_ids
+        ):
+            raise ValueError(
+                f"HWDB entry {self.name} FASED model_ids must be an integer list"
+            )
+        model_ids = tuple(raw_model_ids)
+        if model_ids != (0, 1, 2, 3, 4):
+            raise ValueError(
+                f"HWDB entry {self.name} FASED model_ids must be exactly [0, 1, 2, 3, 4]"
+            )
+
+        settings_per_model = raw_contract["settings_per_model"]
+        if type(settings_per_model) is not int or settings_per_model not in (28, 34):
+            raise ValueError(
+                f"HWDB entry {self.name} FASED settings_per_model must be 28 or 34"
+            )
+
+        filename = self.customruntimeconfig
+        if (
+            not isinstance(filename, str)
+            or not filename
+            or filename in (".", "..")
+            or filename != os.path.basename(filename)
+            or "/" in filename
+            or "\\" in filename
+        ):
+            raise ValueError(
+                f"HWDB entry {self.name} contracted custom_runtime_config must be a safe bare filename"
+            )
+
+        configured_path = Path(self.get_local_runtime_conf_path())
+        if not configured_path.is_absolute():
+            deploy_dir = Path(__file__).resolve().parents[1]
+            configured_path = deploy_dir / configured_path
+        if configured_path.is_symlink():
+            raise ValueError(
+                f"HWDB entry {self.name} FASED profile must not be a symlink: {configured_path}"
+            )
+        if not configured_path.is_file() or not os.access(configured_path, os.R_OK):
+            raise ValueError(
+                f"HWDB entry {self.name} FASED profile is missing, unreadable, or not a regular file: {configured_path}"
+            )
+
+        profile_bytes = configured_path.read_bytes()
+        if not profile_bytes:
+            raise ValueError(
+                f"HWDB entry {self.name} FASED profile is empty: {configured_path}"
+            )
+        actual_sha256 = hashlib.sha256(profile_bytes).hexdigest()
+        if actual_sha256 != expected_sha256:
+            raise ValueError(
+                f"HWDB entry {self.name} FASED profile SHA-256 mismatch: "
+                f"expected {expected_sha256}, got {actual_sha256}"
+            )
+
+        try:
+            profile_text = profile_bytes.decode("ascii")
+        except UnicodeDecodeError as error:
+            raise ValueError(
+                f"HWDB entry {self.name} FASED profile must be ASCII"
+            ) from error
+        if "\r" in profile_text:
+            raise ValueError(
+                f"HWDB entry {self.name} FASED profile must use LF line endings"
+            )
+        # Split only on the LF byte that the launch-time sed command flattens.
+        # Python's splitlines() also treats VT, FF, and record separators as
+        # line boundaries, which would validate bytes the driver receives as
+        # one malformed argument.
+        lines = profile_text.split("\n")
+        if lines[-1] == "":
+            lines.pop()
+
+        settings_by_model: Dict[int, Dict[str, int]] = {
+            model_id: {} for model_id in model_ids
+        }
+        for line_number, line in enumerate(lines, start=1):
+            match = _FASED_SETTING_PATTERN.fullmatch(line)
+            if match is None:
+                raise ValueError(
+                    f"HWDB entry {self.name} FASED profile line {line_number} "
+                    "must be +mm_<setting>_<model>=<nonnegative integer>"
+                )
+            setting_name, model_text, value_text = match.groups()
+            model_id = int(model_text)
+            if model_text != str(model_id):
+                raise ValueError(
+                    f"HWDB entry {self.name} FASED profile line {line_number} "
+                    f"has noncanonical model id {model_text}"
+                )
+            if model_id not in settings_by_model:
+                raise ValueError(
+                    f"HWDB entry {self.name} FASED profile has unexpected model {model_id}"
+                )
+            if setting_name in settings_by_model[model_id]:
+                raise ValueError(
+                    f"HWDB entry {self.name} FASED profile duplicates "
+                    f"model {model_id} setting {setting_name}"
+                )
+            value = int(value_text)
+            if value > 0xFFFFFFFF:
+                raise ValueError(
+                    f"HWDB entry {self.name} FASED profile line {line_number} "
+                    f"value exceeds UINT32_MAX"
+                )
+            settings_by_model[model_id][setting_name] = value
+
+        for model_id, settings in settings_by_model.items():
+            if len(settings) != settings_per_model:
+                raise ValueError(
+                    f"HWDB entry {self.name} FASED model {model_id} has "
+                    f"{len(settings)} settings; expected {settings_per_model}"
+                )
+        reference_settings = settings_by_model[model_ids[0]]
+        for model_id in model_ids[1:]:
+            if settings_by_model[model_id] != reference_settings:
+                raise ValueError(
+                    f"HWDB entry {self.name} FASED model {model_id} settings "
+                    "do not exactly match model 0"
+                )
+
+        return FASEDRuntimeProfile(
+            filename=filename,
+            sha256=expected_sha256,
+            model_ids=model_ids,
+            settings_per_model=settings_per_model,
+        )
+
+    def _sanitize_fased_controlled_extra_args(
+        self, raw_args: str, channel: str
+    ) -> str:
+        """Return shell-quoted inert tokens for a contracted launch channel."""
+        if not isinstance(raw_args, str):
+            raise ValueError(
+                f"HWDB entry {self.name} {channel} must be a string for a "
+                "contracted FASED launch"
+            )
+        if re.fullmatch(r"[A-Za-z0-9_+.,:/=@% \t-]*", raw_args) is None:
+            raise ValueError(
+                f"HWDB entry {self.name} {channel} contains an unsafe shell "
+                "character for a contracted FASED launch"
+            )
+        try:
+            tokens = shlex.split(raw_args, posix=True)
+        except ValueError as error:
+            raise ValueError(
+                f"HWDB entry {self.name} {channel} is not valid inert-token syntax"
+            ) from error
+        for token in tokens:
+            if _FASED_CONTROLLED_EXTRA_TOKEN_PATTERN.fullmatch(token) is None:
+                raise ValueError(
+                    f"HWDB entry {self.name} {channel} contains unsafe token "
+                    f"{token!r}"
+                )
+            if "+mm_" in token:
+                raise ValueError(
+                    f"HWDB entry {self.name} forbids out-of-band +mm_ arguments "
+                    f"in {channel} when fased_runtime_profile is contracted"
+                )
+        return " ".join(shlex.quote(token) for token in tokens)
+
+    def _sanitize_fased_controlled_generated_tokens(
+        self,
+        tokens: Sequence[str],
+        channel: str,
+        *,
+        allowed_expansions: Tuple[str, ...] = (),
+    ) -> List[str]:
+        """Validate and quote every generated token in a contracted launch."""
+        sanitized = []
+        for token in tokens:
+            if not token:
+                continue
+            if token in allowed_expansions:
+                sanitized.append(token)
+                continue
+            if (
+                not isinstance(token, str)
+                or _FASED_CONTROLLED_EXTRA_TOKEN_PATTERN.fullmatch(token) is None
+            ):
+                raise ValueError(
+                    f"HWDB entry {self.name} {channel} contains unsafe generated "
+                    f"token {token!r}"
+                )
+            if "+mm_" in token:
+                raise ValueError(
+                    f"HWDB entry {self.name} forbids out-of-band +mm_ arguments "
+                    f"in {channel} when fased_runtime_profile is contracted"
+                )
+            sanitized.append(shlex.quote(token))
+        return sanitized
+
+    def _get_fased_runtime_profile_commands(self) -> Tuple[str, str]:
+        """Return fail-closed prelaunch and receipt-publication commands."""
+        profile = self.fased_runtime_profile
+        if profile is None:
+            return ("", "")
+
+        receipt_filename = "fased-runtime-profile.applied.json"
+        receipt = {
+            "hwdb_entry": self.name,
+            "model_ids": list(profile.model_ids),
+            "profile_snapshot": profile.snapshot_filename,
+            "profile_source": profile.filename,
+            "settings_per_model": profile.settings_per_model,
+            "sha256": profile.sha256,
+            "total_settings": profile.total_settings,
+        }
+        receipt_json = json.dumps(receipt, sort_keys=True, separators=(",", ":"))
+        model_ids_text = ",".join(map(str, profile.model_ids))
+
+        prelaunch = "\n".join(
+            [
+                "set -euo pipefail",
+                f"fased_profile_source={shlex.quote(profile.filename)}",
+                f"fased_profile_snapshot={shlex.quote(profile.snapshot_filename)}",
+                f"fased_profile_expected_sha={shlex.quote(profile.sha256)}",
+                f"fased_profile_receipt={shlex.quote(receipt_filename)}",
+                'fased_profile_tmp="${fased_profile_snapshot}.tmp.$$"',
+                'fased_receipt_tmp="${fased_profile_receipt}.tmp.$$"',
+                "fased_profile_cleanup() {",
+                '  rm -f -- "$fased_profile_tmp" "$fased_receipt_tmp"',
+                "}",
+                "trap fased_profile_cleanup EXIT",
+                'rm -f -- "$fased_profile_receipt" "$fased_profile_tmp" '
+                '"$fased_receipt_tmp" uartlog memory_stats0.csv memory_stats1.csv '
+                "memory_stats2.csv memory_stats3.csv memory_stats4.csv",
+                '[[ -f "$fased_profile_source" && ! -L "$fased_profile_source" && -r "$fased_profile_source" && -s "$fased_profile_source" ]]',
+                'cp -- "$fased_profile_source" "$fased_profile_tmp"',
+                'fased_profile_actual_sha="$(sha256sum -- "$fased_profile_tmp" | awk \'{print $1}\')"',
+                '[[ "$fased_profile_actual_sha" == "$fased_profile_expected_sha" ]]',
+                'if [[ -e "$fased_profile_snapshot" || -L "$fased_profile_snapshot" ]]; then',
+                '  if [[ ! -f "$fased_profile_snapshot" || -L "$fased_profile_snapshot" ]]; then',
+                "    printf '[FASED] invalid runtime profile snapshot path: %s\\n' "
+                '"$fased_profile_snapshot" >&2',
+                "    exit 1",
+                "  fi",
+                "fi",
+                'mv -fT -- "$fased_profile_tmp" "$fased_profile_snapshot"',
+                '[[ -f "$fased_profile_snapshot" && ! -L "$fased_profile_snapshot" && -r "$fased_profile_snapshot" && -s "$fased_profile_snapshot" ]]',
+                'fased_profile_snapshot_sha="$(sha256sum -- "$fased_profile_snapshot" | awk \'{print $1}\')"',
+                '[[ "$fased_profile_snapshot_sha" == "$fased_profile_expected_sha" ]]',
+                'fased_profile_args="$(sed \':a;N;$!ba;s/\\n/ /g\' -- "$fased_profile_snapshot")"',
+                '[[ -n "$fased_profile_args" ]]',
+                f"printf '%s\\n' {shlex.quote(receipt_json)} > \"$fased_receipt_tmp\"",
+            ]
+        )
+        postlaunch = "\n".join(
+            [
+                'mv -fT -- "$fased_receipt_tmp" "$fased_profile_receipt"',
+                '[[ -f "$fased_profile_receipt" && ! -L "$fased_profile_receipt" && -r "$fased_profile_receipt" && -s "$fased_profile_receipt" ]]',
+                "trap - EXIT",
+                'printf \'[FASED] verified runtime profile sha256=%s models=%s settings_per_model=%s total=%s\\n\' '
+                f'"$fased_profile_actual_sha" {shlex.quote(model_ids_text)} '
+                f"{profile.settings_per_model} {profile.total_settings}",
+            ]
+        )
+        return (prelaunch, postlaunch)
 
     def get_deploytriplet_for_config(self) -> str:
         """Get the deploytriplet for this configuration."""
@@ -424,16 +881,9 @@ class RuntimeHWConfig:
         """return relative local path of the runtime conf used to run this sim."""
         if self.customruntimeconfig is None:
             return None
-        quintuplet = self.get_deployquintuplet_for_config()
-        drivers_software_base = (
-            LOCAL_DRIVERS_GENERATED_SRC
-            + "/"
-            + self.get_platform()
-            + "/"
-            + quintuplet
-            + "/"
+        return os.path.join(
+            CUSTOM_RUNTIMECONFS_BASE, self.customruntimeconfig.lstrip("/")
         )
-        return CUSTOM_RUNTIMECONFS_BASE + self.customruntimeconfig
 
     def get_additional_required_sim_files(self) -> List[Tuple[str, str]]:
         """return list of any additional files required to run a simulation."""
@@ -472,6 +922,20 @@ class RuntimeHWConfig:
         # the sed is in there to get rid of newlines in runtime confs
         driver = self.get_local_driver_binaryname()
         runtimeconf = self.get_local_runtimeconf_binaryname()
+        profile_preflight = ""
+        profile_postlaunch = ""
+        extra_plusargs_for_command = extra_plusargs
+        extra_args_for_command = extra_args
+        if self.fased_runtime_profile is not None:
+            extra_plusargs_for_command = self._sanitize_fased_controlled_extra_args(
+                extra_plusargs, "extra_plusargs"
+            )
+            extra_args_for_command = self._sanitize_fased_controlled_extra_args(
+                extra_args, "extra_args"
+            )
+            profile_preflight, profile_postlaunch = (
+                self._get_fased_runtime_profile_commands()
+            )
 
         def array_to_plusargs(
             valuesarr: Sequence[Optional[Any]], plusarg: str
@@ -518,9 +982,12 @@ class RuntimeHWConfig:
 
         # TODO: supernode support (tracefile, trace-select.. etc)
         permissive_driver_args = []
-        permissive_driver_args += (
-            [f"$(sed ':a;N;$!ba;s/\\n/ /g' {runtimeconf})"] if runtimeconf else []
-        )
+        if self.fased_runtime_profile is not None:
+            permissive_driver_args += ["$fased_profile_args"]
+        elif runtimeconf:
+            permissive_driver_args += [
+                f"$(sed ':a;N;$!ba;s/\\n/ /g' {runtimeconf})"
+            ]
         if profile_interval != -1:
             permissive_driver_args += [f"+profile-interval={profile_interval}"]
         permissive_driver_args += [zero_out_dram]
@@ -581,14 +1048,31 @@ class RuntimeHWConfig:
             )
             permissive_driver_args += command_pcisoffsets
 
-        driver_call = f"""{need_sudo} ./{driver} +permissive {" ".join(permissive_driver_args)} {extra_plusargs} +permissive-off {" ".join(command_bootbinaries)} {extra_args} """
+        if self.fased_runtime_profile is not None:
+            permissive_driver_args = self._sanitize_fased_controlled_generated_tokens(
+                permissive_driver_args,
+                "generated permissive arguments",
+                allowed_expansions=("$fased_profile_args",),
+            )
+            command_bootbinaries = self._sanitize_fased_controlled_generated_tokens(
+                command_bootbinaries, "generated boot-binary arguments"
+            )
+
+        driver_call = f"""{need_sudo} ./{driver} +permissive {" ".join(permissive_driver_args)} {extra_plusargs_for_command} +permissive-off {" ".join(command_bootbinaries)} {extra_args_for_command} """
         base_command = (
             f"""script -f -c 'stty intr ^] && {driver_call} && stty intr ^c' uartlog"""
         )
+
+        if profile_preflight:
+            screen_wrapped = (
+                f"""screen -S {screen_name} -d -m bash -c "{base_command}" && sleep 1 || exit $?"""
+            )
+            return (
+                f"{profile_preflight}\n{screen_wrapped}\n{profile_postlaunch}"
+            )
         screen_wrapped = (
             f"""screen -S {screen_name} -d -m bash -c "{base_command}"; sleep 1"""
         )
-
         return screen_wrapped
 
     def get_kill_simulation_command(self) -> str:
@@ -626,6 +1110,25 @@ class RuntimeHWConfig:
                 ret.append(maybe_file)
         return ret
 
+    def verify_local_uri_path(
+        self, dir: str, local_path: str, remote_path: str
+    ) -> None:
+        """Recheck one contracted URI cache entry immediately before rsync."""
+        if self.artifact_sha256 is None:
+            return
+        for container in self.uri_list:
+            both = container._choose_path(dir, self)
+            if both is None:
+                continue
+            _, destination = both
+            if destination == local_path and container.destination_name == remote_path:
+                container.verify_local_artifact(destination, self)
+                return
+        raise RuntimeError(
+            f"Contracted URI path is not part of HWDB entry {self.name}: "
+            f"{local_path} -> {remote_path}"
+        )
+
     def resolve_hwcfg_values(self, dir: str) -> None:
         # must be done after fetch_all_URIs
         # based on the platform, read the URI, fill out values
@@ -634,6 +1137,7 @@ class RuntimeHWConfig:
             return
         else:  # bitstream_tar platforms
             for container in self.uri_list:
+                container._expected_sha256(self)
                 both = container._choose_path(dir, self)
 
                 # do nothing if there isn't a URI
@@ -644,6 +1148,8 @@ class RuntimeHWConfig:
                     (uri, destination) = both
 
                 if uri == self.bitstream_tar and uri is not None:
+                    assert destination is not None
+                    container.verify_local_artifact(destination, self)
                     # unpack destination value
                     temp_dir = f"{dir}/{URIContainer.hashed_name(uri)}-dir"
                     local(f"mkdir -p {temp_dir}")
@@ -701,7 +1207,7 @@ class RuntimeHWConfig:
 
         deploy_dir = get_deploy_dir()
         with InfoStreamLogger("stdout"), prefix(f"cd {deploy_dir}/../"), prefix(
-            create_export_string({"RISCV", "PATH", "LD_LIBRARY_PATH"})
+            create_export_string(FIRESIM_BUILD_ENV_VARS)
         ), prefix("source sourceme-manager.sh --skip-ssh-setup"), prefix("cd sim/"):
             driverbuildcommand = f"make PLATFORM={self.get_platform()} TARGET_PROJECT={target_project} {extra_target_project_make_args(target_project, target_project_makefrag, deploy_dir)} DESIGN={design} TARGET_CONFIG={target_config} PLATFORM_CONFIG={platform_config} {self.get_driver_build_target()}"
             buildresult = run(driverbuildcommand)
@@ -821,6 +1327,8 @@ class RuntimeBuildRecipeConfig(RuntimeHWConfig):
                 self.deploy_makefrag = abs_deploy_makefrag
 
         self.customruntimeconfig = build_recipe_dict["metasim_customruntimeconfig"]
+        self.fased_runtime_profile = None
+        self.artifact_sha256 = None
         # note whether we've built a copy of the simulation driver for this hwconf
         self.driver_built = False
         self.metasim_host_simulator = default_metasim_host_sim
@@ -1259,5 +1767,3 @@ class RuntimeConfig:
         self.firesim_topology_with_passes.run_workload_passes(
             use_mock_instances_for_testing
         )
-
-

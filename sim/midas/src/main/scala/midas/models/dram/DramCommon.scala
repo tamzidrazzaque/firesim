@@ -24,7 +24,8 @@ trait HasDRAMMASConstants {
 }
 
 object DRAMMasEnums extends HasDRAMMASConstants {
-  val cmd_nop :: cmd_act :: cmd_pre :: cmd_casw :: cmd_casr :: cmd_ref :: Nil = Enum(6)
+  // cmd_refsb (single-bank refresh) is only emitted by the HBM model
+  val cmd_nop :: cmd_act :: cmd_pre :: cmd_casw :: cmd_casr :: cmd_ref :: cmd_refsb :: Nil = Enum(7)
   val bank_idle :: bank_active :: Nil                                         = Enum(numBankStates)
   val rank_active :: rank_refresh :: Nil                                      = Enum(numRankStates)
 }
@@ -64,7 +65,8 @@ class DRAMProgrammableTimings
     else tCAS
   }
 
-  // Defaults are set to sg093, x8, 2048Mb density (1GHz clock)
+  // Defaults are set to sg093, x8, 2048Mb density (1GHz clock). Micron's
+  // sg093/x8 TRRD is 5000 ps, which is 5 controller cycles at 1 GHz.
   val registers = Seq(
     tAL   -> RuntimeSetting(0, "Additive Latency"),
     tCAS  -> JSONSetting(14, "CAS Latency", { _("CL_TIME") }),
@@ -77,7 +79,7 @@ class DRAMProgrammableTimings
     tRC   -> JSONSetting(47, "Row Cycle time", { _("TRC") }),
     tRCD  -> JSONSetting(14, "Row-to-Column Delay", { _("TRCD") }),
     tRFC  -> JSONSetting(160, "ReFresh Cycle time", { _("TRFC_MIN") }),
-    tRRD  -> JSONSetting(8, "Row-to-Row Delay", { _("TRRD") }),
+    tRRD  -> JSONSetting(5, "Row-to-Row Delay", { _("TRRD") }),
     tRP   -> JSONSetting(14, "Row-Precharge delay", { _("TRP") }),
     tRTP  -> JSONSetting(8, "Read-To-Precharge delay", { lut => lut("TRTP").max(lut("TRTP_TCK")) }),
     tRTRS -> JSONSetting(2, "Rank-to-Rank Switching Time", { _ => 2 }), // FIXME
@@ -563,7 +565,11 @@ class RankStateTracker(key: DramOrganizationParams) extends Module with HasDRAMM
   io.rank.state   := state
 }
 
-class CommandBusMonitor extends Module {
+// Prints one line per command on a DRAM command bus. `prefix` is prepended
+// to every line (e.g. "ch2:" to distinguish the command buses of independent
+// channels in a multi-channel model); the default produces the historical
+// single-bus format.
+class CommandBusMonitor(prefix: String = "") extends Module {
   import DRAMMasEnums._
   val io = IO(new Bundle {
     val cmd     = Input(cmd_nop.cloneType)
@@ -578,18 +584,18 @@ class CommandBusMonitor extends Module {
   cycleCounter := cycleCounter + 1.U
   when(io.cmd =/= cmd_nop) {
     lastCommand := cycleCounter
-    when(lastCommand + 1.U =/= cycleCounter) { printf("nop(%d);\n", cycleCounter - lastCommand - 1.U) }
+    when(lastCommand + 1.U =/= cycleCounter) { printf(s"${prefix}nop(%d);\n", cycleCounter - lastCommand - 1.U) }
   }
 
   switch(io.cmd) {
     is(cmd_act) {
-      printf("activate(%d, %d, %d); // %d\n", io.rank, io.bank, io.row, cycleCounter)
+      printf(s"${prefix}activate(%d, %d, %d); // %d\n", io.rank, io.bank, io.row, cycleCounter)
     }
     is(cmd_casr) {
       val autoPRE   = io.autoPRE
       val burstChop = false.B
       val column    = 0.U // Don't care since we aren't checking data
-      printf("read(%d, %d, %d, %x, %x); // %d\n", io.rank, io.bank, column, autoPRE, burstChop, cycleCounter)
+      printf(s"${prefix}read(%d, %d, %d, %x, %x); // %d\n", io.rank, io.bank, column, autoPRE, burstChop, cycleCounter)
     }
     is(cmd_casw) {
       val autoPRE   = io.autoPRE
@@ -598,7 +604,7 @@ class CommandBusMonitor extends Module {
       val mask      = 0.U // Don't care since we aren't checking data
       val data      = 0.U // Don't care since we aren't checking data
       printf(
-        "write(%d, %d, %d, %x, %x, %d, %d); // %d\n",
+        s"${prefix}write(%d, %d, %d, %x, %x, %d, %d); // %d\n",
         io.rank,
         io.bank,
         column,
@@ -610,11 +616,14 @@ class CommandBusMonitor extends Module {
       )
     }
     is(cmd_ref) {
-      printf("refresh(%d); // %d\n", io.rank, cycleCounter)
+      printf(s"${prefix}refresh(%d); // %d\n", io.rank, cycleCounter)
+    }
+    is(cmd_refsb) {
+      printf(s"${prefix}refsb(%d,%d); // %d\n", io.rank, io.bank, cycleCounter)
     }
     is(cmd_pre) {
       val preAll = false.B
-      printf("precharge(%d,%d,%d); // %d\n", io.rank, io.bank, preAll, cycleCounter)
+      printf(s"${prefix}precharge(%d,%d,%d); // %d\n", io.rank, io.bank, preAll, cycleCounter)
     }
   }
 }

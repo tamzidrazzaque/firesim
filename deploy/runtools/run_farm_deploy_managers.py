@@ -6,6 +6,8 @@ import re
 import logging
 import abc
 import json
+import shlex
+import secrets
 from fabric.api import prefix, local, run, env, cd, warn_only, put, settings, hide  # type: ignore
 from fabric.contrib.project import rsync_project  # type: ignore
 from os.path import join as pjoin
@@ -206,19 +208,36 @@ class InstanceDeployManager(metaclass=abc.ABCMeta):
 
             # Append required URI paths to the end of this list
             hwcfg = serv.get_resolved_server_hardware_config()
-            files_to_copy.extend(hwcfg.get_local_uri_paths(uridir))
+            local_uri_paths = hwcfg.get_local_uri_paths(uridir)
+            files_to_copy.extend(local_uri_paths)
+            contracted_uri_paths = (
+                set(local_uri_paths)
+                if getattr(hwcfg, "artifact_sha256", None) is not None
+                else set()
+            )
 
             for local_path, remote_path in files_to_copy:
+                if (local_path, remote_path) in contracted_uri_paths:
+                    hwcfg.verify_local_uri_path(uridir, local_path, remote_path)
                 # -z --inplace
                 rsync_cap = rsync_project(
                     local_dir=local_path,
                     remote_dir=pjoin(remote_sim_rsync_dir, remote_path),
                     ssh_opts="-o StrictHostKeyChecking=no",
-                    extra_opts="-L",
+                    extra_opts=(
+                        "-L --checksum"
+                        if (local_path, remote_path) in contracted_uri_paths
+                        else "-L"
+                    ),
                     capture=True,
                 )
                 rootLogger.debug(rsync_cap)
                 rootLogger.debug(rsync_cap.stderr)
+                if getattr(rsync_cap, "failed", False):
+                    raise RuntimeError(
+                        f"Failed to copy simulation infrastructure file "
+                        f"{local_path} to slot {slotno}: {rsync_cap.stderr}"
+                    )
 
             run(f"cp -r {remote_sim_rsync_dir}/* {remote_sim_dir}/", shell=True)
 
@@ -1097,8 +1116,25 @@ class XilinxAlveoInstanceDeployManager(InstanceDeployManager):
         return db[slotno]["bdf"]
 
     def flash_fpgas(self) -> None:
+        """JTAG-program all FPGAs in a single Vivado session.
+
+        Supports heterogeneous configs (different bitstreams per slot).
+        Uses program_fpga_fleet.tcl to avoid the hw_server wedge caused
+        by back-to-back Vivado process launches.
+
+        Wraps the JTAG flash with PCI disconnect/reconnect (via
+        firesim-fpga-util.py) so the kernel picks up the new device
+        configuration after reprogramming.
+        """
         if self.instance_assigned_simulations():
-            self.instance_logger("""Flash all FPGA Slots.""")
+            self.instance_logger("Flash all FPGA Slots (single-session).")
+
+            json_db = self.parent_node.get_fpga_db()
+            collect = run(f"cat {json_db}")
+            db = json.loads(collect)
+
+            mapping_lines = []
+            scripts_synced = False
 
             for slotno, firesimservernode in enumerate(self.parent_node.sim_slots):
                 serv = firesimservernode
@@ -1111,36 +1147,52 @@ class XilinxAlveoInstanceDeployManager(InstanceDeployManager):
                 )
                 bit = os.path.join(bitstream_tar_unpack_dir, "firesim.bit")
 
-                # at this point the tar file is in the sim slot
                 run(f"rm -rf {bitstream_tar_unpack_dir}")
                 run(f"tar xvf {remote_sim_dir}/{bitstream_tar} -C {remote_sim_dir}")
 
-                self.instance_logger(f"""Copying FPGA flashing scripts for {slotno}""")
-                rsync_cap = rsync_project(
-                    local_dir=f"../platforms/{self.PLATFORM_NAME}/scripts",
-                    remote_dir=remote_sim_dir,
-                    ssh_opts="-o StrictHostKeyChecking=no",
-                    extra_opts="-L -p",
-                    capture=True,
-                )
-                rootLogger.debug(rsync_cap)
-                rootLogger.debug(rsync_cap.stderr)
+                if not scripts_synced:
+                    rsync_cap = rsync_project(
+                        local_dir=f"../platforms/{self.PLATFORM_NAME}/scripts",
+                        remote_dir=remote_sim_dir,
+                        ssh_opts="-o StrictHostKeyChecking=no",
+                        extra_opts="-L -p",
+                        capture=True,
+                    )
+                    rootLogger.debug(rsync_cap)
+                    rootLogger.debug(rsync_cap.stderr)
+                    scripts_synced = True
+                    scripts_dir = f"{remote_sim_dir}/scripts"
 
-                json_db = self.parent_node.get_fpga_db()
-                bdf = self.slot_to_bdf(slotno, json_db)
+                assert slotno < len(db), f"Less FPGAs than slots ({slotno} >= {len(db)})"
+                uid = db[slotno]["uid"]
+                self.instance_logger(f"Slot {slotno}: {uid} -> {bit}")
+                mapping_lines.append(f"{uid} {bit}")
 
-                self.instance_logger(
-                    f"""Flashing FPGA Slot: {slotno} ({bdf}) with bitstream: {bit}"""
-                )
-                # Use a system wide installed firesim-fpga-util.py
-                cmd = f"{script_path}/firesim-fpga-util.py"
-                check_script(
-                    cmd,
-                    Path(
-                        f"{get_deploy_dir()}/../platforms/{self.PLATFORM_NAME}/scripts"
-                    ),
-                )
-                run(f"""{cmd} --bitstream {bit} --bdf {bdf} --fpga-db {json_db}""")
+            fpga_util = f"{script_path}/firesim-fpga-util.py"
+            check_script(
+                fpga_util,
+                Path(f"{get_deploy_dir()}/../platforms/{self.PLATFORM_NAME}/scripts"),
+            )
+
+            self.instance_logger("Disconnecting all FPGAs from PCI bus.")
+            for slotno in range(len(self.parent_node.sim_slots)):
+                bdf = db[slotno]["bdf"]
+                run(f"{fpga_util} --bdf {bdf} --disconnect-bdf --fpga-db {json_db}")
+
+            map_file = f"{self.get_remote_sim_dir_for_slot(0)}/flash_map.txt"
+            map_content = "\n".join(mapping_lines)
+            run(f"cat > {map_file} << 'MAPEOF'\n{map_content}\nMAPEOF")
+
+            tcl = f"{scripts_dir}/program_fpga_fleet.tcl"
+            vivado = run("which vivado || which vivado_lab", warn_only=True).strip()
+            if not vivado:
+                raise RuntimeError("Could not find vivado or vivado_lab on PATH")
+            run(f"{vivado} -mode batch -source {tcl} -tclargs -map_file {map_file}")
+
+            self.instance_logger("Reconnecting all FPGAs to PCI bus.")
+            for slotno in range(len(self.parent_node.sim_slots)):
+                bdf = db[slotno]["bdf"]
+                run(f"{fpga_util} --bdf {bdf} --reconnect-bdf --fpga-db {json_db}")
 
     def change_pcie_perms(self) -> None:
         if self.instance_assigned_simulations():
@@ -1270,9 +1322,7 @@ class XilinxAlveoInstanceDeployManager(InstanceDeployManager):
                 cmd,
                 Path(f"{get_deploy_dir()}/../platforms/{self.PLATFORM_NAME}/scripts"),
             )
-            run(
-                f"""{cmd} --bitstream {bitstream} --driver {driver} --out-db-json {json_db}"""
-            )
+            run(f"""{cmd} --bitstream {bitstream} --driver {driver} --out-db-json {json_db}""")
 
     def enumerate_fpgas(self, uridir: str) -> None:
         """Handle fpga setup for this platform."""
@@ -1346,6 +1396,453 @@ class XilinxAlveoU200InstanceDeployManager(XilinxAlveoInstanceDeployManager):
     def __init__(self, parent_node: Inst) -> None:
         super().__init__(parent_node)
         self.PLATFORM_NAME = "xilinx_alveo_u200"
+
+
+class CorigineXB10InstanceDeployManager(XilinxAlveoInstanceDeployManager):
+    """Deploy XB10s without changing host-global XDMA state.
+
+    XB10 hosts can contain multiple independently-owned cards behind one XDMA
+    kernel module.  The generic Alveo flow unloads/reloads that module and
+    chmods every ``/dev/xdma*`` node, which is not safe on a shared host.  This
+    subclass instead removes/rescans only the selected PCI functions while the
+    existing XDMA module remains registered.
+    """
+
+    VIVADO_SETTINGS_ENV = "FIRESIM_XB10_VIVADO_SETTINGS"
+    DEFAULT_VIVADO_SETTINGS = "/ecad/tools/xilinx/2025.1/Vivado/settings64.sh"
+    EXPECTED_VIVADO_VERSION = "2025.1"
+    _BDF_RE = re.compile(r"^[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}\.[0-7]$")
+    _UID_RE = re.compile(r"^[A-Za-z0-9_.:-]+/[A-Za-z0-9_.:-]+$")
+
+    def __init__(self, parent_node: Inst) -> None:
+        super().__init__(parent_node)
+        self.PLATFORM_NAME = "corigine_xb10"
+
+    @classmethod
+    def _validate_fpga_db_entries(
+        cls, raw_db: object, expected_slots: int
+    ) -> List[Dict[str, str]]:
+        if not isinstance(raw_db, list) or len(raw_db) != expected_slots:
+            raise RuntimeError(
+                "XB10 FPGA DB must contain exactly one entry per selected slot "
+                f"({expected_slots} expected)"
+            )
+        if expected_slots < 1:
+            raise RuntimeError("XB10 deployment has no selected FPGA slots")
+
+        entries: List[Dict[str, str]] = []
+        for index, raw_entry in enumerate(raw_db):
+            if not isinstance(raw_entry, dict):
+                raise RuntimeError(f"XB10 FPGA DB entry {index} is not a mapping")
+            if not {"bdf", "uid", "device"}.issubset(raw_entry):
+                raise RuntimeError(f"XB10 FPGA DB entry {index} is incomplete")
+            bdf = str(raw_entry["bdf"])
+            uid = str(raw_entry["uid"])
+            device = str(raw_entry["device"])
+            if cls._BDF_RE.fullmatch(bdf) is None:
+                raise RuntimeError(
+                    f"XB10 FPGA DB entry {index} has invalid BDF {bdf!r}"
+                )
+            if cls._UID_RE.fullmatch(uid) is None:
+                raise RuntimeError(
+                    f"XB10 FPGA DB entry {index} has invalid UID {uid!r}"
+                )
+            if re.fullmatch(r"[A-Za-z0-9_.:-]+", device) is None:
+                raise RuntimeError(
+                    f"XB10 FPGA DB entry {index} has invalid device name {device!r}"
+                )
+            entries.append({"bdf": bdf, "uid": uid, "device": device})
+
+        bdfs = [entry["bdf"].lower() for entry in entries]
+        uids = [entry["uid"] for entry in entries]
+        if len(set(bdfs)) != len(bdfs):
+            raise RuntimeError("XB10 FPGA DB contains duplicate BDFs")
+        if len(set(uids)) != len(uids):
+            raise RuntimeError("XB10 FPGA DB contains duplicate JTAG UIDs")
+        return entries
+
+    def _read_selected_fpga_db(self) -> Tuple[str, List[Dict[str, str]]]:
+        json_db = self.parent_node.get_fpga_db()
+        if not os.path.isabs(json_db):
+            raise RuntimeError("XB10 FPGA DB path must be absolute")
+        raw = run(f"cat -- {shlex.quote(json_db)}")
+        try:
+            parsed = json.loads(str(raw))
+        except json.JSONDecodeError as error:
+            raise RuntimeError(f"Invalid XB10 FPGA DB {json_db}: {error}") from error
+        entries = self._validate_fpga_db_entries(
+            parsed, len(self.parent_node.sim_slots)
+        )
+        return json_db, entries
+
+    def _vivado_environment_prefix(self) -> str:
+        settings_path = os.environ.get(
+            self.VIVADO_SETTINGS_ENV, self.DEFAULT_VIVADO_SETTINGS
+        )
+        return (
+            f"test -r {shlex.quote(settings_path)} && "
+            f"source {shlex.quote(settings_path)}"
+        )
+
+    def _preflight_xb10_tools(self) -> Tuple[str, str, str]:
+        """Resolve and version-check programming tools before PCI mutation."""
+        environment = self._vivado_environment_prefix()
+        command = (
+            f"{environment} && "
+            "vivado_bin=$(command -v vivado) && "
+            "hw_server_bin=$(command -v hw_server) && "
+            'version_line=$("$vivado_bin" -version | sed -n "1p") && '
+            'printf "__FIRESIM_VIVADO__=%s\\n" "$vivado_bin" && '
+            'printf "__FIRESIM_HW_SERVER__=%s\\n" "$hw_server_bin" && '
+            'printf "__FIRESIM_VIVADO_VERSION__=%s\\n" "$version_line"'
+        )
+        output = str(run(command))
+        markers: Dict[str, str] = {}
+        for line in output.splitlines():
+            if line.startswith("__FIRESIM_") and "=" in line:
+                key, value = line.split("=", 1)
+                markers[key] = value.strip()
+
+        vivado = markers.get("__FIRESIM_VIVADO__", "")
+        hw_server = markers.get("__FIRESIM_HW_SERVER__", "")
+        version_line = markers.get("__FIRESIM_VIVADO_VERSION__", "")
+        version_match = re.match(r"^[Vv]ivado\s+v([^\s]+)", version_line)
+        if not vivado or not hw_server or version_match is None:
+            raise RuntimeError("Unable to resolve Vivado and hw_server for XB10")
+        if version_match.group(1) != self.EXPECTED_VIVADO_VERSION:
+            raise RuntimeError(
+                "Corigine XB10 programming requires Vivado "
+                f"{self.EXPECTED_VIVADO_VERSION}, found {version_match.group(1)}"
+            )
+        return environment, vivado, hw_server
+
+    def _run_card_action(
+        self,
+        action: str,
+        bdf: str,
+        card_helper: str,
+        operation_token: str,
+        warn: bool = False,
+    ):
+        if action != "reconnect-if-needed":
+            raise ValueError(f"unsupported XB10 card action: {action}")
+        command = (
+            f"sudo {shlex.quote(card_helper)} {action} "
+            f"--bdf {shlex.quote(bdf)} "
+            f"--token {shlex.quote(operation_token)}"
+        )
+        if warn:
+            with settings(warn_only=True):
+                return run(command)
+        return run(command)
+
+    def _program_with_guaranteed_reconnect(
+        self,
+        entries: List[Dict[str, str]],
+        card_helper: str,
+        operation_token: str,
+        program_command: str,
+    ) -> None:
+        """Program once, then reconnect every card which was disconnected."""
+        primary_error: Optional[BaseException] = None
+        primary_traceback = None
+        reconnect_failures: List[str] = []
+        try:
+            run(program_command)
+        except BaseException as error:
+            primary_error = error
+            primary_traceback = error.__traceback__
+        finally:
+            for entry in reversed(entries):
+                bdf = entry["bdf"]
+                try:
+                    result = self._run_card_action(
+                        "reconnect-if-needed",
+                        bdf,
+                        card_helper,
+                        operation_token,
+                        warn=True,
+                    )
+                except BaseException:
+                    reconnect_failures.append(bdf)
+                    continue
+                if getattr(result, "return_code", 0) != 0:
+                    reconnect_failures.append(bdf)
+
+        if reconnect_failures:
+            message = "Failed to reconnect XB10 BDF(s): " + ", ".join(
+                reconnect_failures
+            )
+            if primary_error is None:
+                raise RuntimeError(message)
+            raise RuntimeError(message) from primary_error
+        if primary_error is not None:
+            raise primary_error.with_traceback(primary_traceback)
+
+    def flash_fpgas(self) -> None:
+        """Preflight and program only DB-selected XB10 cards."""
+        if not self.instance_assigned_simulations():
+            return
+
+        self._require_xb10_artifact_contracts()
+        _, entries = self._read_selected_fpga_db()
+        environment, vivado, _ = self._preflight_xb10_tools()
+        mapping_lines: List[str] = []
+        scripts_dir: Optional[str] = None
+
+        for slotno, firesimservernode in enumerate(self.parent_node.sim_slots):
+            hwcfg = firesimservernode.get_resolved_server_hardware_config()
+            remote_sim_dir = self.get_remote_sim_dir_for_slot(slotno)
+            unpack_dir = os.path.join(remote_sim_dir, str(self.PLATFORM_NAME))
+            bit = os.path.join(unpack_dir, "firesim.bit")
+            bitstream_archive = os.path.join(
+                remote_sim_dir, hwcfg.get_bitstream_tar_filename()
+            )
+            # Recheck the archive after infrasetup and immediately before its
+            # bytes can reach the programming flow.
+            self._verify_remote_artifact_archive(slotno, "bitstream_tar")
+            run(f"rm -rf {shlex.quote(unpack_dir)}")
+            run(
+                f"tar xvf {shlex.quote(bitstream_archive)} "
+                f"-C {shlex.quote(remote_sim_dir)}"
+            )
+            self._verify_remote_extracted_bitstream(slotno)
+
+            if scripts_dir is None:
+                rsync_cap = rsync_project(
+                    local_dir=f"../platforms/{self.PLATFORM_NAME}/scripts",
+                    remote_dir=remote_sim_dir,
+                    ssh_opts="-o StrictHostKeyChecking=no",
+                    extra_opts="-L -p",
+                    capture=True,
+                )
+                rootLogger.debug(rsync_cap)
+                rootLogger.debug(rsync_cap.stderr)
+                if getattr(rsync_cap, "failed", False):
+                    raise RuntimeError(
+                        "Failed to copy XB10 programming helper scripts: "
+                        f"{rsync_cap.stderr}"
+                    )
+                scripts_dir = f"{remote_sim_dir}/scripts"
+
+            entry = entries[slotno]
+            mapping_lines.append(
+                f"{entry['uid']}|{entry['device']}|{entry['bdf']} {bit}"
+            )
+
+        if scripts_dir is None:
+            raise RuntimeError("XB10 deployment has no scripts directory")
+        card_helper = f"{scripts_dir}/firesim-xb10-card.py"
+        map_file = f"{self.get_remote_sim_dir_for_slot(0)}/flash_map.txt"
+        quoted_lines = " ".join(shlex.quote(line) for line in mapping_lines)
+        run(f"printf '%s\\n' {quoted_lines} > {shlex.quote(map_file)}")
+
+        # Everything below is checked before the first PCI remove: exact BDF
+        # shape/current binding/no open handles, unique live JTAG UID matches,
+        # bitstream presence, and exact Vivado release.
+        for entry in entries:
+            run(
+                f"sudo {shlex.quote(card_helper)} preflight "
+                f"--bdf {shlex.quote(entry['bdf'])}"
+            )
+        tcl = f"{scripts_dir}/program_fpga_fleet.tcl"
+        operation_token = secrets.token_hex(16)
+        final_bitstream_checks = " && ".join(
+            f"({self._remote_extracted_bitstream_check_command(slotno)})"
+            for slotno in range(len(self.parent_node.sim_slots))
+        )
+        vivado_command = (
+            f"{final_bitstream_checks} && {environment} && "
+            f"{shlex.quote(vivado)} -mode batch "
+            f"-source {shlex.quote(tcl)} -tclargs "
+            f"-map_file {shlex.quote(map_file)} "
+            f"-disconnect_helper {shlex.quote(card_helper)} "
+            f"-operation_token {shlex.quote(operation_token)}"
+        )
+
+        self._program_with_guaranteed_reconnect(
+            entries,
+            card_helper,
+            operation_token,
+            vivado_command,
+        )
+
+    def change_pcie_perms(self) -> None:
+        """Grant the invoking user access to only the selected card nodes."""
+        if not self.instance_assigned_simulations():
+            return
+        _, entries = self._read_selected_fpga_db()
+        helper = (
+            f"{self.get_remote_sim_dir_for_slot(0)}/scripts/" "firesim-xb10-card.py"
+        )
+        for entry in entries:
+            run(
+                f"sudo {shlex.quote(helper)} grant "
+                f"--bdf {shlex.quote(entry['bdf'])}"
+            )
+
+    def _remove_stale_fased_runtime_profile(self, slotno: int) -> None:
+        """Remove only the contracted profile before extracting a fresh bundle."""
+        serv = self.parent_node.sim_slots[slotno]
+        hwcfg = serv.get_resolved_server_hardware_config()
+        profile = hwcfg.fased_runtime_profile
+        if profile is None:
+            return
+        remote_profile = os.path.join(
+            self.get_remote_sim_dir_for_slot(slotno), profile.filename
+        )
+        run(f"rm -f -- {shlex.quote(remote_profile)}")
+
+    def _verify_remote_fased_runtime_profile(self, slotno: int) -> None:
+        """Bind the extracted remote profile to the locally validated contract."""
+        serv = self.parent_node.sim_slots[slotno]
+        hwcfg = serv.get_resolved_server_hardware_config()
+        profile = hwcfg.fased_runtime_profile
+        if profile is None:
+            return
+        remote_profile = os.path.join(
+            self.get_remote_sim_dir_for_slot(slotno), profile.filename
+        )
+        run(
+            "set -euo pipefail; "
+            f"profile={shlex.quote(remote_profile)}; "
+            f"expected_sha={shlex.quote(profile.sha256)}; "
+            '[[ -f "$profile" && ! -L "$profile" && -r "$profile" && -s "$profile" ]]; '
+            'actual_sha="$(sha256sum -- "$profile" | awk \'{print $1}\')"; '
+            '[[ "$actual_sha" == "$expected_sha" ]]'
+        )
+
+    def _verify_remote_artifact_archive(self, slotno: int, artifact_name: str) -> None:
+        """Verify a contracted archive on the run host before it is consumed."""
+        if artifact_name not in ("bitstream_tar", "driver_tar"):
+            raise ValueError(f"Unsupported FPGA artifact {artifact_name!r}")
+        serv = self.parent_node.sim_slots[slotno]
+        hwcfg = serv.get_resolved_server_hardware_config()
+        contract = getattr(hwcfg, "artifact_sha256", None)
+        if contract is None:
+            return
+
+        expected_sha256 = getattr(contract, artifact_name)
+        if re.fullmatch(r"[0-9a-f]{64}", expected_sha256) is None:
+            raise RuntimeError(
+                f"Unresolved {artifact_name} SHA-256 placeholder for XB10 slot {slotno}"
+            )
+        filename = (
+            hwcfg.get_bitstream_tar_filename()
+            if artifact_name == "bitstream_tar"
+            else hwcfg.get_driver_tar_filename()
+        )
+        remote_archive = os.path.join(
+            self.get_remote_sim_dir_for_slot(slotno), filename
+        )
+        run(
+            "set -euo pipefail; "
+            f"archive={shlex.quote(remote_archive)}; "
+            f"expected_sha={shlex.quote(expected_sha256)}; "
+            '[[ -f "$archive" && ! -L "$archive" && -r "$archive" && -s "$archive" ]]; '
+            'actual_sha="$(sha256sum -- "$archive" | awk \'{print $1}\')"; '
+            '[[ "$actual_sha" == "$expected_sha" ]]'
+        )
+
+    def _require_xb10_artifact_contracts(self) -> None:
+        """Reject physical XB10 setup before remote work if any hash is absent."""
+        for slotno, serv in enumerate(self.parent_node.sim_slots):
+            hwcfg = serv.get_resolved_server_hardware_config()
+            contract = getattr(hwcfg, "artifact_sha256", None)
+            if contract is None:
+                raise RuntimeError(
+                    f"Physical XB10 slot {slotno} requires an artifact_sha256 contract"
+                )
+            for artifact_name in ("bitstream_tar", "driver_tar"):
+                expected_sha256 = getattr(contract, artifact_name, None)
+                if (
+                    not isinstance(expected_sha256, str)
+                    or re.fullmatch(r"[0-9a-f]{64}", expected_sha256) is None
+                ):
+                    raise RuntimeError(
+                        f"Physical XB10 slot {slotno} has an unresolved or invalid "
+                        f"{artifact_name} SHA-256"
+                    )
+
+    def _remote_extracted_bitstream_check_command(self, slotno: int) -> str:
+        """Return a fail-closed check binding the extracted bit to its archive."""
+        serv = self.parent_node.sim_slots[slotno]
+        hwcfg = serv.get_resolved_server_hardware_config()
+        contract = getattr(hwcfg, "artifact_sha256", None)
+        expected_sha256 = (
+            getattr(contract, "bitstream_tar", None) if contract is not None else None
+        )
+        if (
+            not isinstance(expected_sha256, str)
+            or re.fullmatch(r"[0-9a-f]{64}", expected_sha256) is None
+        ):
+            raise RuntimeError(
+                f"Physical XB10 slot {slotno} has no resolved bitstream_tar SHA-256"
+            )
+
+        remote_sim_dir = self.get_remote_sim_dir_for_slot(slotno)
+        remote_archive = os.path.join(
+            remote_sim_dir, hwcfg.get_bitstream_tar_filename()
+        )
+        remote_bit = os.path.join(remote_sim_dir, self.PLATFORM_NAME, "firesim.bit")
+        archive_member = f"{self.PLATFORM_NAME}/firesim.bit"
+        return (
+            "set -euo pipefail; "
+            f"archive={shlex.quote(remote_archive)}; "
+            f"bit={shlex.quote(remote_bit)}; "
+            f"member={shlex.quote(archive_member)}; "
+            f"expected_archive_sha={shlex.quote(expected_sha256)}; "
+            '[[ -f "$archive" && ! -L "$archive" && -r "$archive" && -s "$archive" ]]; '
+            'actual_archive_sha="$(sha256sum -- "$archive" | awk \'{print $1}\')"; '
+            '[[ "$actual_archive_sha" == "$expected_archive_sha" ]]; '
+            '[[ -f "$bit" && ! -L "$bit" && -r "$bit" && -s "$bit" ]]; '
+            '[[ "$(stat -c %h -- "$bit")" == 1 ]]; '
+            'actual_bit_sha="$(sha256sum -- "$bit" | awk \'{print $1}\')"; '
+            'archive_bit_sha="$(tar -xOzf "$archive" -- "$member" | '
+            'sha256sum | awk \'{print $1}\')"; '
+            '[[ "$actual_bit_sha" == "$archive_bit_sha" ]]'
+        )
+
+    def _verify_remote_extracted_bitstream(self, slotno: int) -> None:
+        """Verify extracted bit metadata and exact bytes on the run host."""
+        run(self._remote_extracted_bitstream_check_command(slotno))
+
+    def infrasetup_instance(self, uridir: str) -> None:
+        """Set up selected cards without unloading/reloading XDMA."""
+        if self.instance_assigned_simulations():
+            if not self.parent_node.metasimulation_enabled:
+                self._require_xb10_artifact_contracts()
+            for slotno in range(len(self.parent_node.sim_slots)):
+                self.copy_sim_slot_infrastructure(slotno, uridir)
+                self._verify_remote_artifact_archive(slotno, "driver_tar")
+                self._verify_remote_artifact_archive(slotno, "bitstream_tar")
+                self._remove_stale_fased_runtime_profile(slotno)
+                self.extract_driver_tarball(slotno)
+                self._verify_remote_fased_runtime_profile(slotno)
+
+            if not self.parent_node.metasimulation_enabled:
+                self.flash_fpgas()
+                self.change_pcie_perms()
+
+        if self.instance_assigned_switches():
+            for slotno in range(len(self.parent_node.switch_slots)):
+                self.copy_switch_slot_infrastructure(slotno)
+
+        if self.instance_assigned_pipes():
+            for slotno in range(len(self.parent_node.pipe_slots)):
+                self.copy_pipe_slot_infrastructure(slotno)
+
+    def enumerate_fpgas(self, uridir: str) -> None:
+        raise RuntimeError(
+            "XB10 enumeration changes host-global XDMA state; use an explicitly "
+            "coordinated FPGA database instead"
+        )
+
+    def create_fpga_database(self, uridir: str) -> None:
+        raise RuntimeError(
+            "XB10 FPGA database creation is disabled on shared hosts; use an "
+            "explicitly coordinated FPGA database instead"
+        )
 
 
 class RHSResearchNitefuryIIInstanceDeployManager(XilinxAlveoInstanceDeployManager):
