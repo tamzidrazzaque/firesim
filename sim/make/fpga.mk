@@ -42,6 +42,14 @@ fpga_delivery_files = $(addprefix $(fpga_delivery_dir)/$(BASE_FILE_NAME), \
 	.sv .defines.vh \
 	.synthesis.xdc .implementation.xdc)
 
+# Black-box resources can include Verilog headers referenced by the generated
+# monolithic RTL (for example, Radiance's fpnew blocks include registers.svh).
+# Deliver all generated headers alongside the RTL so FPGA synthesis sees the
+# same include files as host simulation.  A stamp is used instead of a parse-
+# time wildcard because these files may not exist until elaboration finishes.
+fpga_delivery_headers_stamp := $(fpga_delivery_dir)/.generated-headers.stamp
+fpga_delivery_files += $(fpga_delivery_headers_stamp)
+
 # Files used to run FPGA-level metasimulation
 fpga_sim_delivery_files = $(fpga_driver_dir)/$(DESIGN)-$(PLATFORM)
 
@@ -60,6 +68,12 @@ $(repo_state): $(simulator_verilog) $(fpga_work_dir)/stamp
 $(fpga_delivery_dir)/$(BASE_FILE_NAME)%: $(simulator_verilog) $(fpga_work_dir)/stamp
 	cp -f $(GENERATED_DIR)/*.ipgen.tcl $(@D) || true
 	cp -f $(GENERATED_DIR)/$(@F) $@
+
+$(fpga_delivery_headers_stamp): $(simulator_verilog) $(fpga_work_dir)/stamp
+	find $(GENERATED_DIR) -maxdepth 1 -type f \
+		\( -name '*.vh' -o -name '*.svh' \) \
+		-exec cp -f {} $(@D) \;
+	touch $@
 
 $(fpga_driver_dir)/$(BASE_FILE_NAME)%: $(simulator_verilog) $(fpga_work_dir)/stamp
 	mkdir -p $(@D)

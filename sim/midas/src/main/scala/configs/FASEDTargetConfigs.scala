@@ -108,6 +108,20 @@ class WithHBMChannels(n: Int)
 //   WithHBMQuadChannel_HBM2FRFCFS16GBDualPC_BaseF2Config
 class WithHBMQuadChannel extends WithHBMChannels(4)
 
+// Sets the banks per pseudo channel of the HBM timing model. Layer *in front
+// of* a config that sets HBMOrganizationKey.
+class WithHBMBankOrganization(bankGroups: Int, banksPerGroup: Int)
+    extends Config((_, _, up) => { case HBMOrganizationKey =>
+      up(HBMOrganizationKey).copy(maxBankGroups = bankGroups, banksPerGroup = banksPerGroup)
+    })
+
+// Marks the top `sidBits` bank-group bits as stack-ID bits (tCCDR applies
+// between them). Layer *in front of* a config that sets HBMOrganizationKey.
+class WithHBMStackIDBits(sidBits: Int)
+    extends Config((_, _, up) => { case HBMOrganizationKey =>
+      up(HBMOrganizationKey).copy(sidBits = sidBits)
+    })
+
 // Enables the per-request CSV trace ("HBMREQ,..." lines on metasim stdout)
 // on an already-selected HBM memory model. Layer *in front of* a config that
 // sets MemModelKey to an HBMModelConfig, e.g.:
@@ -236,4 +250,27 @@ class HBM2FRFCFS16GBQuadChannel
     extends Config(
       new WithHBMQuadChannel ++
         new HBM2FRFCFS16GBDualPC
+    )
+
+// HBM4 16-High (JESD270-4A Tables 4 and 5): 64 banks per pseudo channel
+// (4 stack IDs x 16 banks, 8 bank groups of 8) and a 1 KB page per pseudo
+// channel. The model takes the bank group from the low bank-index bits, so its
+// group g is the spec's group {SID, BA[3]} up to a renumbering of the banks.
+// Four channels, as HBM2FRFCFS16GBQuadChannel; timings are runtime registers.
+class HBM4FRFCFS16HiQuadChannel
+    extends Config(
+      new WithHBMBankOrganization(bankGroups = 8, banksPerGroup = 8) ++
+        new HBM2FRFCFS16GBQuadChannel
+    )
+
+// HBM2 8-High, 8 Gb per channel (JESD235D Tables 4 and 5): 32 banks per pseudo
+// channel (SID, BA[3:0]) in 8 bank groups of 4 (A-D: SID 0, E-H: SID 1) and a
+// 1 KB page per pseudo channel. The model's group g has SID g[2]; reads to the
+// other SID are spaced by the tCCDR register. Four channels, as
+// HBM2FRFCFS16GBQuadChannel; timings are runtime registers.
+class HBM2FRFCFS8HiQuadChannel
+    extends Config(
+      new WithHBMStackIDBits(1) ++
+        new WithHBMBankOrganization(bankGroups = 8, banksPerGroup = 4) ++
+        new HBM2FRFCFS16GBQuadChannel
     )

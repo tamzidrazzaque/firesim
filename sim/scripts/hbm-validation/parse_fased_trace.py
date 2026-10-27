@@ -14,7 +14,9 @@ bus). In a verilator metasim their printfs land in the simulator log
 
 In multi-channel configurations every line is prefixed with `ch<N>:` (each
 channel has its own pair of command buses / monitors); unprefixed lines are
-reported as channel 0.
+reported as channel 0. Multi-channel models also tag the prefix with their
+AXI edge base, `m<hex base>ch<N>:`; when several such bridges share one log,
+--model-base selects one of them.
 
 `nop(n);` filler lines are ignored. The `rank` position of the DDR3-style
 monitor holds the HBM pseudo-channel.
@@ -34,7 +36,7 @@ import sys
 # Chisel %d pads with spaces; %x prints hex.
 NUM = r"\s*(\d+)"
 HEX = r"\s*([0-9a-fA-F]+)"
-CHAN_RE = re.compile(r"ch(\d+):")
+CHAN_RE = re.compile(r"(?:m([0-9a-f]+))?ch(\d+):")
 MODEL_RE = re.compile(r"\[FASED\] Model (\d+) accepted ")
 PATTERNS = [
     ("ACT", re.compile(rf"activate\({NUM},{NUM},{NUM}\); //{NUM}")),
@@ -46,12 +48,14 @@ PATTERNS = [
 ]
 
 
-def parse_lines(lines, bank_groups=4):
-    """Yield dicts, one per HBM command found in the log."""
+def parse_lines(lines, bank_groups=4, model_base=None):
+    """Yield dicts, one per HBM command found in the log (of one bridge if model_base is set)."""
     group_bits = bank_groups.bit_length() - 1
     for line in lines:
         chan_m = CHAN_RE.search(line)
-        channel = int(chan_m.group(1)) if chan_m else 0
+        if model_base is not None and (not chan_m or chan_m.group(1) != model_base):
+            continue
+        channel = int(chan_m.group(2)) if chan_m else 0
         for cmd, pat in PATTERNS:
             m = pat.search(line)
             if not m:
@@ -92,9 +96,16 @@ def parse_lines(lines, bank_groups=4):
             break
 
 
-def require_demultiplexed(lines):
+def require_demultiplexed(lines, model_base=None):
     """Reject traces that cannot distinguish independent FASED bridges."""
     model_ids = {int(m.group(1)) for line in lines if (m := MODEL_RE.search(line))}
+    bases = {m.group(1) for line in lines if (m := CHAN_RE.search(line)) and m.group(1)}
+    if model_base is not None:
+        if model_base not in bases:
+            raise ValueError(f"no commands tagged m{model_base}; tagged bridges: {sorted(bases)}")
+        return
+    if len(bases) > 1:
+        raise ValueError(f"commands from bridges {sorted(bases)}; select one with --model-base")
     if len(model_ids) <= 1:
         return
     for line in lines:
@@ -110,12 +121,14 @@ def main():
     ap.add_argument("logfile", help="metasim log containing CommandBusMonitor output")
     ap.add_argument("-o", "--output", default="-", help="output CSV (default stdout)")
     ap.add_argument("--bank-groups", type=int, default=4)
+    ap.add_argument("--model-base", help="hex AXI edge base of the bridge to extract (from the m<base> tag)")
     args = ap.parse_args()
+    model_base = args.model_base.lower().removeprefix("0x") if args.model_base else None
 
     with open(args.logfile, errors="replace") as f:
         lines = f.readlines()
-    require_demultiplexed(lines)
-    cmds = sorted(parse_lines(lines, args.bank_groups), key=lambda c: c["cycle"])
+    require_demultiplexed(lines, model_base)
+    cmds = sorted(parse_lines(lines, args.bank_groups, model_base), key=lambda c: c["cycle"])
 
     out = sys.stdout if args.output == "-" else open(args.output, "w", newline="")
     w = csv.DictWriter(

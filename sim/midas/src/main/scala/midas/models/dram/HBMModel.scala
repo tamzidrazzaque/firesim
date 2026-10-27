@@ -61,6 +61,35 @@ import firesim.lib.nasti._
   *     serving traffic. REFSB commands count toward the tFAW window and are
   *     spaced by tRREFD, per JESD235.
   *
+  *   - Optionally (refsbIdleFirst), each owed REFSB goes to a bank of the
+  *     current set that is idle instead of to the next bank in round-robin
+  *     order, and up to refsbMaxPostponed owed REFSBs may wait for such a
+  *     bank. JESD270-4A 6.3.2.5: REFpb may address the banks of a set in any
+  *     order, a bank may not be refreshed again until its set completes, no
+  *     REFpb may follow the last one of a set within tRFCpb, at most 9 x
+  *     tREFI may pass between refreshes of one bank, and at most 9 REFpb may
+  *     go to one bank within tREFI. refsbMaxPostponed is capped at six sets:
+  *     a bank then waits at most (2 x banks - 1 + 6 x banks + 1) x tREFI /
+  *     banks = 8 x tREFI, and a catch-up refreshes it at most 7 times within
+  *     tREFI. refsbIdleAge additionally lets an open bank with no pending
+  *     reference and no command for that many cycles take an owed REFSB
+  *     (it is precharged first); the choice is dropped if a reference for
+  *     the bank arrives before the REFSB issues. refsbYield ranks REFSBs
+  *     that are not yet overdue, and their precharges, below demand ACT and
+  *     PRE. refsbLRU picks, among the candidate banks, the one with the
+  *     longest time since its last command instead of the lowest index.
+  *     refsbAgeScale halves the refsbIdleAge threshold for each full set of
+  *     owed REFSBs. refsbLRU picks the bank with the longest time since its last
+  *     command, instead of the lowest index, whenever an open bank is chosen
+  *     for refresh. refsbAgeScale halves the refsbIdleAge threshold for each
+  *     full set of owed REFSBs.
+  *
+  *   - Optionally (bankXorHash), the bank index is XORed with the row
+  *     address folded to the bank-index width (permutation-based page
+  *     interleaving). For any one row this permutes the banks, so the
+  *     address map stays one-to-one; streams whose bases differ only in row
+  *     bits stop landing in the same bank.
+  *
   * All timing parameters are runtime-programmable registers (in units of the
   * memory controller clock, like all FASED timings), so alternate timing
   * tables -- e.g. the PARE table -- can be loaded from a runtime config
@@ -83,6 +112,11 @@ import firesim.lib.nasti._
   *   independent HBM channels modeled by one HBMModel instance. Each channel
   *   gets its own scheduler and complete timing state (see HBMModel header).
   *   The total modeled capacity is maxChannels * channelSize.
+  * @param sidBits
+  *   stack-ID (SID) bits among the bank-group bits: the top sidBits of the
+  *   model's bank-group index (JESD235D Table 5: 1 for 8-High stacks, whose
+  *   32 banks are SID, BA[3:0] in groups A-D / E-H). Reads to a different SID
+  *   are spaced by tCCDR. 0 = no SID.
   */
 case class HBMOrganizationParams(
   maxPseudoChannels: Int,
@@ -91,12 +125,14 @@ case class HBMOrganizationParams(
   channelSize:       BigInt,
   maxChannels:       Int = 1,
   lineBits:          Int = 8,
+  sidBits:           Int = 0,
 ) {
   require(isPow2(maxPseudoChannels) && maxPseudoChannels >= 2)
   require(isPow2(maxBankGroups))
   require(isPow2(banksPerGroup))
   require(isPow2(channelSize))
   require(isPow2(maxChannels) && maxChannels >= 1)
+  require(sidBits >= 0 && sidBits < log2Up(maxBankGroups))
   def maxBanks   = maxBankGroups * banksPerGroup // banks per pseudo channel
   def bankBits   = log2Up(maxBanks)
   def bankGroupBits = log2Up(maxBankGroups)
@@ -104,6 +140,7 @@ case class HBMOrganizationParams(
   def rowBits    = log2Ceil(channelSize) - lineBits
   def maxRows    = 1 << rowBits
   def chBits     = log2Ceil(maxChannels) // 0 when single-channel
+  def sidOfGroup(group: Int): Int = group >> (bankGroupBits - sidBits)
 }
 
 /** Width of HBM timing registers and of every state element that stores or
@@ -119,6 +156,13 @@ case class HBMOrganizationParams(
   */
 trait HasHBMTimingConstants {
   val hbmTimingBits = 16
+}
+
+/** Limits of the idle-first REFSB policy (see the HBMModel header). */
+object HBMRefreshPolicy {
+  def maxPostponed(key: HBMOrganizationParams): Int = 6 * key.maxBanks
+  def maxPostponedBits(key: HBMOrganizationParams): Int = log2Ceil(maxPostponed(key) + 1)
+  val idleAgeBits = 12
 }
 
 /** Named HBM2 timing tables, in units of the controller clock (CK).
@@ -365,10 +409,29 @@ class HBMMMRegIO(val cfg: HBMModelConfig) extends MMRegIO(cfg) with HasConsoleUt
   val openPagePolicy = Input(Bool())
   // Refresh mode 1 = per-bank (REFSB), 0 = all-bank (REFab)
   val perBankRefresh = Input(Bool())
+  // REFSB bank order 1 = an idle bank of the current set first, 0 = round-robin
+  val refsbIdleFirst = Input(Bool())
+  // Owed REFSBs that may wait for an idle bank (refsbIdleFirst only)
+  val refsbMaxPostponed = Input(UInt(HBMRefreshPolicy.maxPostponedBits(cfg.hbmKey).W))
+  // Cycles without a command after which an open bank counts as idle for
+  // REFSB (refsbIdleFirst only); 0 = only precharged banks are idle
+  val refsbIdleAge = Input(UInt(HBMRefreshPolicy.idleAgeBits.W))
+  // 1 = REFSBs that are not overdue yield the row bus to demand ACT / PRE
+  val refsbYield = Input(Bool())
+  // REFSB bank choice 1 = least recently used candidate, 0 = lowest index
+  val refsbLRU = Input(Bool())
+  // 1 = refsbIdleAge is halved for each full set of owed REFSBs
+  val refsbAgeScale = Input(Bool())
+  // Bank index 1 = XOR-hashed with the folded row address, 0 = plain bit slice
+  val bankXorHash = Input(Bool())
   // Additional latency added to read data beats after they leave the devices
   val backendLatency = Input(UInt(cfg.backendKey.latencyBits.W))
 
   val hbmTimings = Input(new HBMProgrammableTimings())
+  // Seamless RD-to-RD delay between stack IDs (JESD235D tCCDR: vendor specific,
+  // 2 to 4 nCK). Only materialized when the organization has SID bits, so the
+  // register set of every other configuration is unchanged.
+  val tCCDR = if (cfg.hbmKey.sidBits > 0) Some(Input(UInt(16.W))) else None
 
   val schedulerWindowSize   = Input(UInt(log2Ceil(cfg.schedulerWindowSize).W))
   val transactionQueueDepth = Input(UInt(log2Ceil(cfg.transactionQueueDepth).W))
@@ -394,7 +457,22 @@ class HBMMMRegIO(val cfg: HBMModelConfig) extends MMRegIO(cfg) with HasConsoleUt
       min     = 1,
       max     = Some(cfg.transactionQueueDepth),
     ),
-  )
+    refsbIdleFirst        -> RuntimeSetting(0, "REFSB to an idle bank first (1) or round-robin (0)"),
+    refsbMaxPostponed     -> RuntimeSetting(
+      0,
+      "REFSBs that may be postponed for an idle bank",
+      max = Some(HBMRefreshPolicy.maxPostponed(cfg.hbmKey)),
+    ),
+    refsbIdleAge          -> RuntimeSetting(
+      0,
+      "Idle cycles before an open bank may take an owed REFSB (0 = precharged banks only)",
+      max = Some((1 << HBMRefreshPolicy.idleAgeBits) - 1),
+    ),
+    refsbYield            -> RuntimeSetting(0, "REFSBs that are not overdue yield to demand ACT / PRE"),
+    refsbLRU              -> RuntimeSetting(0, "REFSB to the least recently used candidate bank (1) or the lowest index (0)"),
+    refsbAgeScale         -> RuntimeSetting(0, "Halve the REFSB idle age for each full set owed"),
+    bankXorHash           -> RuntimeSetting(0, "XOR the folded row address into the bank index"),
+  ) ++ tCCDR.map(_ -> RuntimeSetting(2, "RD-to-RD delay between stack IDs (tCCDR)", min = 1))
 
   def requestSettings(): Unit = {
     Console.println("Configuring an HBM2 (JESD235) First-Ready FCFS model")
@@ -424,10 +502,12 @@ class HBMEntry(nastiParams: NastiParameters, cfg: HBMBaseConfig)(implicit p: Par
   def bankGroupAddrOH: UInt = UIntToOH(bankGroupAddr)
 
   def decode(from: XactionSchedulerEntry, mmReg: HBMMMRegIO): Unit = {
+    val row  = WireInit(UInt(cfg.hbmKey.rowBits.W), mmReg.rowAddr.getSubAddr(from.addr))
+    val bank = WireInit(UInt(cfg.hbmKey.bankBits.W), mmReg.bankAddr.getSubAddr(from.addr))
     xaction    := from.xaction
-    bankAddr   := mmReg.bankAddr.getSubAddr(from.addr)
+    bankAddr   := Mux(mmReg.bankXorHash, bank ^ RowFold(row, cfg.hbmKey.bankBits), bank)
     bankAddrOH := UIntToOH(bankAddr)
-    rowAddr    := mmReg.rowAddr.getSubAddr(from.addr)
+    rowAddr    := row
     pcAddr     := mmReg.pcAddr.getSubAddr(from.addr)
     pcAddrOH   := UIntToOH(pcAddr)
   }
@@ -589,6 +669,8 @@ class HBMPseudoChannelStateTrackerO(val key: HBMOrganizationParams) extends Bund
   val canREFSB  = Output(Bool())
   val wantREF   = Output(Bool())
   val refsbBank = Output(UInt(key.bankBits.W))
+  // The wanted REFSB is not overdue and may wait behind demand ACT / PRE
+  val refYields = Output(Bool())
   val state     = Output(rank_active.cloneType)
   val bgCanCASR = Vec(key.maxBankGroups, Output(Bool()))
   val bgCanCASW = Vec(key.maxBankGroups, Output(Bool()))
@@ -602,7 +684,16 @@ class HBMPseudoChannelStateTrackerIO(val key: HBMOrganizationParams)
     with HasHBMTimingConstants {
   import DRAMMasEnums._
   val timings          = Input(new HBMProgrammableTimings)
+  val tCCDR            = if (key.sidBits > 0) Some(Input(UInt(hbmTimingBits.W))) else None
   val perBankRefresh   = Input(Bool())
+  val refsbIdleFirst   = Input(Bool())
+  val refsbMaxPostponed = Input(UInt(HBMRefreshPolicy.maxPostponedBits(key).W))
+  val refsbIdleAge     = Input(UInt(HBMRefreshPolicy.idleAgeBits.W))
+  val refsbYield       = Input(Bool())
+  val refsbLRU         = Input(Bool())
+  val refsbAgeScale    = Input(Bool())
+  // Banks of this PC with a pending reference in the scheduler window
+  val bankBusy         = Input(UInt(key.maxBanks.W))
   // Split command buses: row commands (ACT/PRE/REF/REFSB) and column
   // commands (CASR/CASW) may arrive in the same cycle.
   val rowCmd           = Input(cmd_nop.cloneType)
@@ -686,6 +777,19 @@ class HBMPseudoChannelStateTracker(key: HBMOrganizationParams)
         bg.io.set.bits  := t.tCCDL - 1.U
       }
     }
+    // RD-to-RD between stack IDs: tCCDR (JESD235D Table 68 note 22; writes keep tCCDS)
+    io.tCCDR.foreach { tCCDR =>
+      val colGroups = io.colBankGroupOH.asBools
+      bgNextLegalCASR.zipWithIndex.foreach { case (bg, g) =>
+        val otherSID = colGroups.zipWithIndex
+          .collect { case (sel, h) if key.sidOfGroup(h) != key.sidOfGroup(g) => sel }
+          .reduce(_ || _)
+        when(otherSID) {
+          bg.io.set.valid := true.B
+          bg.io.set.bits  := tCCDR - 1.U
+        }
+      }
+    }
   }.elsewhen(io.colCmdUsesThisPC && io.colCmd === cmd_casw) {
     assert(io.pc.canCASW, "HBM PC Timing Violation: Controller issued CASW command illegally")
     // WR-to-WR: tCCDS across groups, tCCDL within the group
@@ -755,7 +859,8 @@ class HBMPseudoChannelStateTracker(key: HBMOrganizationParams)
   // REFSB mode one (single-bank) refresh is owed per tREFI / maxBanks.
   // Disable refresh by setting tREFI = 0.
   val refInterval = Mux(io.perBankRefresh, t.tREFI >> key.bankBits, t.tREFI)
-  when(refCounter >= refInterval && t.tREFI =/= 0.U) {
+  val refDue      = refCounter >= refInterval && t.tREFI =/= 0.U
+  when(refDue) {
     refCounter := 0.U
     wantREF    := true.B
   }.otherwise {
@@ -783,16 +888,119 @@ class HBMPseudoChannelStateTracker(key: HBMOrganizationParams)
     bank.autoPRE         := io.autoPRE
   }
 
-  val refsbBankCanACT = Mux1H(UIntToOH(refsbBank), bankTrackers.map { _.out.canACT })
+  // Idle-bank-first REFSB. Owed refreshes accrue at the round-robin rate;
+  // each goes to a bank of the current set that is precharged, ACT-legal,
+  // and has no pending reference. Failing that, an open bank without pending
+  // references and without a command for refsbIdleAge cycles (if nonzero) is
+  // latched and precharged for refresh; the latch is dropped if a reference
+  // for that bank arrives while the refresh is not yet overdue. Once more
+  // than refsbMaxPostponed are owed and no precharged idle bank exists, one
+  // unrefreshed bank (preferably an aged one, then one without pending
+  // references) is latched and precharged for refresh, as in round-robin mode.
+  // refsbLRU replaces the lowest-index choice among candidates with the least
+  // recently used one; refsbAgeScale halves the idle age per full set owed.
+  val idleFirst   = io.perBankRefresh && io.refsbIdleFirst
+  val refsbIssued = io.rowCmdUsesThisPC && io.rowCmd === cmd_refsb
+  val refsbOwed   = RegInit(0.U((HBMRefreshPolicy.maxPostponedBits(key) + 1).W))
+  val refsbDone   = RegInit(0.U(key.maxBanks.W)) // banks refreshed in the current set
+  val forcing     = RegInit(false.B)
+  val forcedAged  = RegInit(false.B) // latched for being idle, not for being overdue
+  val forcedBank  = RegInit(0.U(key.bankBits.W))
+
+  // Cycles since the last command to each bank (saturating)
+  val bankAge = Seq.tabulate(key.maxBanks) { i =>
+    val age     = RegInit(0.U(HBMRefreshPolicy.idleAgeBits.W))
+    val touched = (io.colCmdUsesThisPC && io.colBankOH(i)) || (io.rowCmdUsesThisPC && io.rowBankOH(i))
+    when(touched) {
+      age := 0.U
+    }.elsewhen(!age.andR) {
+      age := age + 1.U
+    }
+    age
+  }
+
+  // Index of the candidate with the largest age, the lowest index on ties
+  def oldestOf(mask: UInt): UInt = {
+    def pick(xs: Seq[(Bool, UInt, UInt)]): (Bool, UInt, UInt) =
+      if (xs.size == 1) xs.head
+      else {
+        val (lv, la, li) = pick(xs.take(xs.size / 2))
+        val (rv, ra, ri) = pick(xs.drop(xs.size / 2))
+        val takeR        = rv && (!lv || ra > la)
+        (lv || rv, Mux(takeR, ra, la), Mux(takeR, ri, li))
+      }
+    pick(bankAge.zipWithIndex.map { case (a, i) => (mask(i), a, i.U(key.bankBits.W)) })._3
+  }
+  def chooseBank(mask: UInt): UInt = Mux(io.refsbLRU, oldestOf(mask), PriorityEncoder(mask))
+
+  val bankCanACT  = VecInit(bankTrackers.map { _.out.canACT }).asUInt
+  val unrefreshed = ~refsbDone
+  val idleBanks   = unrefreshed & bankCanACT & ~io.bankBusy
+  val quietBanks  = unrefreshed & ~io.bankBusy
+  val setsOwed    = refsbOwed >> key.bankBits
+  val ageShift    = Mux(
+    io.refsbAgeScale,
+    Mux(setsOwed >= HBMRefreshPolicy.idleAgeBits.U, HBMRefreshPolicy.idleAgeBits.U, setsOwed),
+    0.U,
+  )
+  val ageLimit    = io.refsbIdleAge >> ageShift
+  val agedBanks   = Mux(
+    io.refsbIdleAge === 0.U,
+    0.U,
+    quietBanks & VecInit(bankAge.map { _ >= ageLimit }).asUInt,
+  )
+  val urgent      = refsbOwed > io.refsbMaxPostponed
+  val idleBank    = chooseBank(idleBanks)
+  val flexBank    = Mux(idleBanks.orR, idleBank, forcedBank)
+  val flexWant    = refsbOwed =/= 0.U && idleBanks.orR && nextLegalREFSB.io.idle || forcing
+  val forcedBusy  = (io.bankBusy & UIntToOH(forcedBank, key.maxBanks)).orR
+
+  when(idleFirst) {
+    refsbOwed := refsbOwed + (refDue && !refsbOwed.andR).asUInt - refsbIssued.asUInt
+    when(refsbIssued) {
+      forcing := false.B
+      val done = refsbDone | io.rowBankOH
+      refsbDone := Mux(done.andR, 0.U, done)
+      // No REFpb within tRFCpb after the last REFpb of a set
+      when(done.andR) {
+        nextLegalREFSB.io.set.valid := true.B
+        nextLegalREFSB.io.set.bits  := t.tRFCSB - 1.U
+      }
+    }.elsewhen(forcing) {
+      when(forcedAged && forcedBusy) {
+        when(urgent) {
+          forcedAged := false.B
+        }.otherwise {
+          forcing := false.B
+        }
+      }
+    }.elsewhen(!idleBanks.orR) {
+      when(urgent) {
+        forcing    := true.B
+        forcedAged := false.B
+        forcedBank := chooseBank(
+          Mux(agedBanks.orR, agedBanks, Mux(quietBanks.orR, quietBanks, unrefreshed))
+        )
+      }.elsewhen(refsbOwed =/= 0.U && agedBanks.orR) {
+        forcing    := true.B
+        forcedAged := true.B
+        forcedBank := chooseBank(agedBanks)
+      }
+    }
+  }
+
+  val selRefsbBank    = Mux(idleFirst, flexBank, refsbBank)
+  val refsbBankCanACT = Mux1H(UIntToOH(selRefsbBank), bankTrackers.map { _.out.canACT })
 
   io.pc.canREF    := bankTrackers.map { _.out.canACT }.reduce { _ && _ }
   io.pc.canREFSB  := nextLegalREFSB.io.idle && refsbBankCanACT && tFAWcheck.io.enq.ready
-  io.pc.refsbBank := refsbBank
+  io.pc.refsbBank := selRefsbBank
+  io.pc.refYields := idleFirst && io.refsbYield && !urgent && !(forcing && !forcedAged)
   io.pc.canCASR   := nextLegalCASR.io.idle
   io.pc.canCASW   := nextLegalCASW.io.idle
   io.pc.canPRE    := nextLegalPRE.io.idle
   io.pc.canACT    := nextLegalACT.io.idle && tFAWcheck.io.enq.ready
-  io.pc.wantREF   := wantREF
+  io.pc.wantREF   := Mux(idleFirst, flexWant, wantREF)
   io.pc.state     := state
 
   io.pc.bgCanCASR.zip(bgNextLegalCASR).foreach { case (out, ctr) => out := ctr.io.idle }
@@ -823,6 +1031,12 @@ object FasedStripePort {
     }
 }
 
+/** Base address of this FASED instance's AXI slave, which tells apart bridges that share a console. */
+object FasedEdgeBase {
+  def apply()(implicit p: Parameters): Option[BigInt] =
+    p(FasedAXI4Edge).flatMap(_.address.headOption).map(_.base)
+}
+
 // ============================================================================
 // Per-channel scheduler
 // ============================================================================
@@ -849,8 +1063,15 @@ class HBMChannelSchedulerIO(val cfg: HBMModelConfig)(implicit val p: Parameters)
   // Runtime-programmable settings, shared across channels (one register
   // file programs all channels identically, like ranks in the DDR3 model).
   val timings             = Input(new HBMProgrammableTimings)
+  val tCCDR               = if (cfg.hbmKey.sidBits > 0) Some(Input(UInt(16.W))) else None
   val openPagePolicy      = Input(Bool())
   val perBankRefresh      = Input(Bool())
+  val refsbIdleFirst      = Input(Bool())
+  val refsbMaxPostponed   = Input(UInt(HBMRefreshPolicy.maxPostponedBits(cfg.hbmKey).W))
+  val refsbIdleAge        = Input(UInt(HBMRefreshPolicy.idleAgeBits.W))
+  val refsbYield          = Input(Bool())
+  val refsbLRU            = Input(Bool())
+  val refsbAgeScale       = Input(Bool())
   val schedulerWindowSize = Input(UInt(log2Ceil(cfg.schedulerWindowSize).W))
   val pcsInUse            = Input(UInt(cfg.hbmKey.maxPseudoChannels.W))
   val backendLatency      = Input(UInt(cfg.backendKey.latencyBits.W))
@@ -971,8 +1192,9 @@ class HBMChannelScheduler(cfg: HBMModelConfig, chIdx: Int)(implicit p: Parameter
   def conflictsWithCol(pc: UInt, bank: UInt): Bool = colValid && pc === colPC && bank === colBank
 
   // ------------------------------------------------------------------
-  // Row bus: REF/REFSB > refresh-prep PRE > ACT > PRE. An ACT occupies the
-  // row bus for two cycles (JESD235 two-frame ACT encoding).
+  // Row bus: REF/REFSB > refresh-prep PRE > ACT > PRE > yielding REFSB >
+  // yielding refresh-prep PRE. An ACT occupies the row bus for two cycles
+  // (JESD235 two-frame ACT encoding).
   // ------------------------------------------------------------------
   val rowBusBusy = RegNext(selectedRowCmd === cmd_act, false.B)
 
@@ -1022,21 +1244,38 @@ class HBMChannelScheduler(cfg: HBMModelConfig, chIdx: Int)(implicit p: Parameter
     !conflictsWithCol(refPrePC, refPreBank)
 
   // --- Per-bank refresh (REFSB) arbitration ---
+  // REFSBs that are not overdue (refYields), and the precharges preparing
+  // them, rank below demand ACT / PRE.
+  val refsbYieldPCs   = VecInit(pcStateTrackers.map(_.io.pc.refYields)).asUInt
   val refsbReadyPCs   = VecInit(pcStateTrackers.map { pc =>
     pc.io.pc.wantREF && pc.io.pc.canREFSB
   }).asUInt & pcsInUse
-  val refsbPC         = PriorityEncoder(refsbReadyPCs)
-  val refsbBankSel    = PriorityMux(refsbReadyPCs, pcStateTrackers.map(_.io.pc.refsbBank))
-  val suggestREFSB    = perBankRefresh && refsbReadyPCs.orR
   // Precharge the refresh-pending bank if it is currently active
   val refsbPrePCs     = VecInit(pcStateTrackers.map { pc =>
     pc.io.pc.wantREF && pc.io.pc.canPRE &&
     Mux1H(UIntToOH(pc.io.pc.refsbBank), pc.io.pc.banks.map(_.canPRE))
   }).asUInt & pcsInUse
-  val refsbPrePC      = PriorityEncoder(refsbPrePCs)
-  val refsbPreBank    = PriorityMux(refsbPrePCs, pcStateTrackers.map(_.io.pc.refsbBank))
-  val suggestRefsbPRE = perBankRefresh && refsbPrePCs.orR &&
+  def refsbBankOf(pcs: UInt): UInt = PriorityMux(pcs, pcStateTrackers.map(_.io.pc.refsbBank))
+
+  val refsbNowPCs     = refsbReadyPCs & ~refsbYieldPCs
+  val refsbPC         = PriorityEncoder(refsbNowPCs)
+  val refsbBankSel    = refsbBankOf(refsbNowPCs)
+  val suggestREFSB    = perBankRefresh && refsbNowPCs.orR
+  val refsbPreNowPCs  = refsbPrePCs & ~refsbYieldPCs
+  val refsbPrePC      = PriorityEncoder(refsbPreNowPCs)
+  val refsbPreBank    = refsbBankOf(refsbPreNowPCs)
+  val suggestRefsbPRE = perBankRefresh && refsbPreNowPCs.orR &&
     !conflictsWithCol(refsbPrePC, refsbPreBank)
+
+  val refsbLatePCs        = refsbReadyPCs & refsbYieldPCs
+  val lateRefsbPC         = PriorityEncoder(refsbLatePCs)
+  val lateRefsbBank       = refsbBankOf(refsbLatePCs)
+  val suggestLateREFSB    = perBankRefresh && refsbLatePCs.orR
+  val refsbPreLatePCs     = refsbPrePCs & refsbYieldPCs
+  val lateRefsbPrePC      = PriorityEncoder(refsbPreLatePCs)
+  val lateRefsbPreBank    = refsbBankOf(refsbPreLatePCs)
+  val suggestLateRefsbPRE = perBankRefresh && refsbPreLatePCs.orR &&
+    !conflictsWithCol(lateRefsbPrePC, lateRefsbPreBank)
 
   when(!rowBusBusy) {
     when(suggestREF) {
@@ -1062,6 +1301,14 @@ class HBMChannelScheduler(cfg: HBMModelConfig, chIdx: Int)(implicit p: Parameter
       selectedRowCmd := cmd_pre
       rowPC          := prePC
       rowBank        := preBank
+    }.elsewhen(suggestLateREFSB) {
+      selectedRowCmd := cmd_refsb
+      rowPC          := lateRefsbPC
+      rowBank        := lateRefsbBank
+    }.elsewhen(suggestLateRefsbPRE) {
+      selectedRowCmd := cmd_pre
+      rowPC          := lateRefsbPrePC
+      rowBank        := lateRefsbPreBank
     }
   }
 
@@ -1144,8 +1391,18 @@ class HBMChannelScheduler(cfg: HBMModelConfig, chIdx: Int)(implicit p: Parameter
     tracker.io.cmdRow           := cmdRow
     tracker.io.autoPRE          := casAutoPRE
     tracker.io.perBankRefresh   := perBankRefresh
+    tracker.io.refsbIdleFirst   := io.refsbIdleFirst
+    tracker.io.refsbMaxPostponed := io.refsbMaxPostponed
+    tracker.io.refsbIdleAge     := io.refsbIdleAge
+    tracker.io.refsbYield       := io.refsbYield
+    tracker.io.refsbLRU         := io.refsbLRU
+    tracker.io.refsbAgeScale    := io.refsbAgeScale
+    tracker.io.bankBusy         := refList
+      .map { ref => Mux(ref.valid && ref.bits.pcAddrOH(i), ref.bits.bankAddrOH, 0.U) }
+      .reduce(_ | _)
 
     tracker.io.timings := timings
+    tracker.io.tCCDR.zip(io.tCCDR).foreach { case (t, r) => t := r }
     tracker.io.tCycle  := tCycle
   }
 
@@ -1164,12 +1421,13 @@ class HBMChannelScheduler(cfg: HBMModelConfig, chIdx: Int)(implicit p: Parameter
 
   // Dump both command streams (pseudo channel printed in the rank position).
   // Row bus: activate / precharge / refresh / refsb; column bus: read / write.
-  // Multi-channel configurations prefix every line with "ch<N>:" so the
-  // per-channel streams can be separated. A 1-channel model on a striped
-  // FASED port uses the stripe index instead. A contiguous one-channel edge
-  // leaves the historical format unchanged.
+  // Multi-channel configurations prefix every line with "m<edge base>ch<N>:"
+  // so that several bridges sharing one console, and the channels within each,
+  // can be separated. A 1-channel model on a striped FASED port uses the
+  // stripe index instead. A contiguous one-channel edge leaves the historical
+  // format unchanged.
   val monitorPrefix =
-    if (hbmKey.maxChannels > 1) s"ch$chIdx:"
+    if (hbmKey.maxChannels > 1) FasedEdgeBase().map(b => s"m${b.toString(16)}").getOrElse("") + s"ch$chIdx:"
     else FasedStripePort().map(i => s"ch$i:").getOrElse("")
 
   val rowCmdMonitor = Module(new CommandBusMonitor(monitorPrefix))
@@ -1241,8 +1499,15 @@ class HBMModel(cfg: HBMModelConfig)(implicit p: Parameters)
     channel.io.newReference.bits  := newReference.bits
 
     channel.io.timings             := io.mmReg.hbmTimings
+    channel.io.tCCDR.zip(io.mmReg.tCCDR).foreach { case (c, r) => c := r }
     channel.io.openPagePolicy      := io.mmReg.openPagePolicy
     channel.io.perBankRefresh      := io.mmReg.perBankRefresh
+    channel.io.refsbIdleFirst      := io.mmReg.refsbIdleFirst
+    channel.io.refsbMaxPostponed   := io.mmReg.refsbMaxPostponed
+    channel.io.refsbIdleAge        := io.mmReg.refsbIdleAge
+    channel.io.refsbYield          := io.mmReg.refsbYield
+    channel.io.refsbLRU            := io.mmReg.refsbLRU
+    channel.io.refsbAgeScale       := io.mmReg.refsbAgeScale
     channel.io.schedulerWindowSize := io.mmReg.schedulerWindowSize
     channel.io.pcsInUse            := io.mmReg.pcAddr.maskToOH()
     channel.io.backendLatency      := io.mmReg.backendLatency

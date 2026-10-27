@@ -146,6 +146,8 @@ abstract class BaseDRAMMMRegIO(cfg: DRAMBaseConfig) extends MMRegIO(cfg) with Ha
 
   // Page policy 1 = open, 0 = closed
   val openPagePolicy = Input(Bool())
+  // Bank index 1 = XOR-hashed with the folded row address, 0 = plain bit slice
+  val bankXorHash    = Input(Bool())
   // Additional latency added to read data beats after it's received from the devices
   val backendLatency = Input(UInt(cfg.backendKey.latencyBits.W))
 
@@ -158,6 +160,7 @@ abstract class BaseDRAMMMRegIO(cfg: DRAMBaseConfig) extends MMRegIO(cfg) with Ha
   val dramBaseRegisters = Seq(
     (openPagePolicy -> RuntimeSetting(1, "Open-Page Policy")),
     (backendLatency -> RuntimeSetting(2, "Backend Latency", min = 1, max = Some(1 << (cfg.backendKey.latencyBits - 1)))),
+    (bankXorHash    -> RuntimeSetting(0, "XOR the folded row address into the bank index")),
   )
 
   // A list of DDR3 speed grades provided by micron.
@@ -308,6 +311,19 @@ trait HasLegalityUpdateIO {
   //val burstLength = Input(UInt(4.W)) // TODO: Fixme
 }
 
+/** XOR of `row` cut into `bits`-wide slices. XORing it into the bank index
+  * permutes banks per row (permutation-based page interleaving), which stays
+  * one-to-one because the row itself is unchanged.
+  */
+object RowFold {
+  def apply(row: UInt, bits: Int): UInt = {
+    require(bits > 0)
+    (0 until row.getWidth by bits)
+      .map { lo => row(math.min(lo + bits, row.getWidth) - 1, lo) }
+      .reduce(_ ^ _)
+  }
+}
+
 // Add some scheduler specific metadata to a reference
 // TODO factor out different MAS metadata into a mixin
 class MASEntry(nastiParams: NastiParameters, key: DRAMBaseConfig)(implicit p: Parameters) extends Bundle {
@@ -319,10 +335,12 @@ class MASEntry(nastiParams: NastiParameters, key: DRAMBaseConfig)(implicit p: Pa
   val rankAddr   = UInt(key.dramKey.rankBits.W)
 
   def decode(from: XactionSchedulerEntry, mmReg: BaseDRAMMMRegIO): Unit = {
+    val row  = WireInit(UInt(key.dramKey.rowBits.W), mmReg.rowAddr.getSubAddr(from.addr))
+    val bank = WireInit(UInt(key.dramKey.bankBits.W), mmReg.bankAddr.getSubAddr(from.addr))
     xaction    := from.xaction
-    bankAddr   := mmReg.bankAddr.getSubAddr(from.addr)
+    bankAddr   := Mux(mmReg.bankXorHash, bank ^ RowFold(row, key.dramKey.bankBits), bank)
     bankAddrOH := UIntToOH(bankAddr)
-    rowAddr    := mmReg.rowAddr.getSubAddr(from.addr)
+    rowAddr    := row
     rankAddr   := mmReg.rankAddr.getSubAddr(from.addr)
     rankAddrOH := UIntToOH(rankAddr)
   }
