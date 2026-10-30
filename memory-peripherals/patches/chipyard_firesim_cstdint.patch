@@ -1,0 +1,26 @@
+diff --git a/sim/midas/src/main/cc/bridges/cpu_managed_stream.h b/sim/midas/src/main/cc/bridges/cpu_managed_stream.h
+index 2940d0fce..b43566582 100644
+--- a/sim/midas/src/main/cc/bridges/cpu_managed_stream.h
++++ b/sim/midas/src/main/cc/bridges/cpu_managed_stream.h
+@@ -3,6 +3,8 @@
+ #ifndef __BRIDGES_CPU_MANAGED_STREAM_H
+ #define __BRIDGES_CPU_MANAGED_STREAM_H
+
++#include <cstdint>
++
+ #include <functional>
+ #include <string>
+
+diff --git a/sim/midas/src/main/cc/bridges/fpga_managed_stream.h b/sim/midas/src/main/cc/bridges/fpga_managed_stream.h
+index c1450f7d7..07e87a3db 100644
+--- a/sim/midas/src/main/cc/bridges/fpga_managed_stream.h
++++ b/sim/midas/src/main/cc/bridges/fpga_managed_stream.h
+@@ -1,6 +1,8 @@
+ #ifndef __BRIDGES_FPGA_MANAGED_STREAM_H
+ #define __BRIDGES_FPGA_MANAGED_STREAM_H
+
++#include <cstdint>
++
+ // See LICENSE for license details.
+
+ #include <functional>

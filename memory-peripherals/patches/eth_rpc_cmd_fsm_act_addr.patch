@@ -1,0 +1,20 @@
+diff --git a/src/controller_src/rpc_dram_phy/rpc_cmd_fsm.sv b/src/controller_src/rpc_dram_phy/rpc_cmd_fsm.sv
+index 1aa5211..2d56418 100644
+--- a/src/controller_src/rpc_dram_phy/rpc_cmd_fsm.sv
++++ b/src/controller_src/rpc_dram_phy/rpc_cmd_fsm.sv
+@@ -235,7 +235,7 @@ module rpc_cmd_fsm
+             phy_valid_o = 1;
+             state_d = ACTIVATE;
+             //                      BA          ACT            ROW ADDR
+-            phy_cmd_o = {11'b0, addr_q[19:18], 3'b101 ,3'b000, addr_q[17:6], 1'b0};
++            phy_cmd_o = {11'b0, data_o[26:25], 3'b101 ,3'b000, data_o[24:13], 1'b0};
+             len_d = data_o[6:1];
+             addr_d = data_o[26:7];
+             is_write_d = data_o[0];
+@@ -521,4 +521,4 @@ module rpc_cmd_fsm
+     end
+   end
+
+-endmodule
+\ No newline at end of file
++endmodule

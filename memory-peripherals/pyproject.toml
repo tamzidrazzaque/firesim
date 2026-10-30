@@ -1,0 +1,10 @@
+[project]
+name = "memperiph"
+version = "0.1.0"
+description = "FireSim-oriented HyperRAM and RPC DRAM timing and protocol models"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-q"

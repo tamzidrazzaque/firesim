@@ -1,0 +1,22 @@
+diff --git a/src/rtl/tc_sram.sv b/src/rtl/tc_sram.sv
+index 98298d6..fa807e4 100644
+--- a/src/rtl/tc_sram.sv
++++ b/src/rtl/tc_sram.sv
+@@ -125,7 +125,7 @@ module tc_sram #(
+   always_ff @(posedge clk_i or negedge rst_ni) begin
+     if (!rst_ni) begin
+       for (int unsigned i = 0; i < NumWords; i++) begin
+-        sram[i] <= init_val[i];
++        sram[i] = init_val[i];
+       end
+       for (int i = 0; i < NumPorts; i++) begin
+         r_addr_q[i] <= {AddrWidth{1'b0}};
+@@ -152,7 +152,7 @@ module tc_sram #(
+             // update value when write is set at clock
+             for (int unsigned j = 0; j < DataWidth; j++) begin
+               if (be_i[i][j/ByteWidth]) begin
+-                sram[addr_i[i]][j] <= wdata_i[i][j];
++                sram[addr_i[i]][j] = wdata_i[i][j];
+               end
+             end
+           end else begin
