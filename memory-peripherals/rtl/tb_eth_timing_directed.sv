@@ -123,6 +123,40 @@ module tb_eth_timing_directed;
     end
   endtask
 
+  task automatic axi_read_stalled(input logic [47:0] addr,
+                                  input logic [63:0] expected,
+                                  input logic [5:0] id,
+                                  input int stall_cycles);
+    int prior;
+    logic [63:0] held_data;
+    prior = ar_handshakes;
+    @(negedge clk_i);
+    axi_ar_addr_i = addr;
+    axi_ar_len_i = 0;
+    axi_ar_id_i = id;
+    axi_ar_valid_i = 1;
+    wait (ar_handshakes > prior);
+    @(negedge clk_i);
+    axi_ar_valid_i = 0;
+    axi_ar_id_i = 0;
+    do @(negedge clk_i); while (!axi_r_valid_o);
+    held_data = axi_r_data_o;
+    if (held_data != expected || axi_r_id_o != id || !axi_r_last_o || axi_r_resp_o != 0)
+      $fatal(1, "AXI stalled read initial response addr=%h data=%h id=%h",
+        addr, held_data, axi_r_id_o);
+    repeat (stall_cycles) begin
+      @(negedge clk_i);
+      if (!axi_r_valid_o || axi_r_data_o != held_data || axi_r_id_o != id ||
+          !axi_r_last_o || axi_r_resp_o != 0)
+        $fatal(1, "AXI read response changed under backpressure addr=%h", addr);
+    end
+    axi_r_ready_i = 1;
+    @(posedge clk_i);
+    @(negedge clk_i);
+    axi_r_ready_i = 0;
+    $display("PASS AXI read backpressure addr=%h id=%h cycles=%0d", addr, id, stall_cycles);
+  endtask
+
   task automatic direct_ref(input logic [31:0] cmd);
     int prior;
     prior = observe.refreshes;
@@ -175,10 +209,12 @@ module tb_eth_timing_directed;
     if (v_func != v_init)
       $fatal(1, "functional section added %0d timing violations", v_func - v_init);
 
-    if ($test$plusargs("negative_refresh")) begin
-      // Intentional underprogramming: report the first early ACT and stop
-      // before asking the digital device for data during REF BUSY.
-      write_reg(100, 2);
+    if ($test$plusargs("negative_refresh") || $test$plusargs("borderline_refresh")) begin
+      // N_REF=2 produces REF+16, early under either reading. N_REF=20
+      // clears one tREFI after the controller's packet alignment, but is
+      // still early under the row-step reading.
+      // Stop after the ACT so the two refresh interpretations stay separate.
+      write_reg(100, $test$plusargs("borderline_refresh") ? 20 : 2);
       direct_ref(32'h04000000);
       prior = ar_handshakes;
       @(negedge clk_i);
@@ -188,9 +224,12 @@ module tb_eth_timing_directed;
       @(negedge clk_i);
       axi_ar_valid_i = 0;
       wait (observe.violations > v_func);
-      $display("PASS expected short REF violation count=%0d", observe.violations - v_func);
+      $display("PASS expected REF interpretation violation count=%0d borderline=%0d",
+        observe.violations - v_func, $test$plusargs("borderline_refresh"));
       $finish;
     end
+
+    axi_read_stalled(48'h100, 64'h1122334455667788, 6'h2a, 7);
 
     // Etron section 5 describes one-shot refresh as one pass over selected
     // rows. These row-step waits are the selected, documented interpretation.

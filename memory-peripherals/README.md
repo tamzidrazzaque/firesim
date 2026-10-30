@@ -26,9 +26,10 @@ These are simulated timings. Nothing in this tree was run on the U250, and no XD
 | `integration/chipyard/` | Rocket/BOOM harness that routes AXI through the ETH controller to the RPC pin model |
 | `independent/rpc_fased/` | Datasheet-derived RPC command checker and negative timing tests |
 | `third_party/firesim` | Isolated FireSim checkout at `8ce47277f` (`hbm-arch1-compact-test`), with the new models applied |
-| `third_party/rpc_dram_controller` | ETH Zurich controller `3ce56547`, used read-only |
+| `third_party/rpc_dram_controller` | Isolated ETH Zurich controller `3ce56547`, with the documented ACT-address patch applied locally |
 | `docs/parameters.md` | Timing constants, source, and specified/inferred/approximation tag |
 | `docs/SV_VERIFICATION_HANDOFF.md` | Exact parts, supported SV modes, tests, and open spec interpretations |
+| `docs/VALIDATION_2026-10-30.md` | Current status matrix, same-clock FASED/ETH comparison, and research limits |
 | `results/` | Pytest log, characterization CSV, plots |
 
 `schwarz-em/hyperram-phy-secret` is not visible with the current GitHub credentials. No vendor Verilog model is copied into this tree.
@@ -40,13 +41,14 @@ cd memory-peripherals
 ./scripts/run_sv_spec_checks.sh --with-eth
 ./scripts/run_chipyard_eth_timing.sh rocket
 ./scripts/run_chipyard_eth_timing.sh boom
+.venv/bin/python scripts/verify_rpc_trace_evidence.py
 ```
 
 Python only:
 
 ```bash
 cd memory-peripherals
-.venv/bin/python -m pytest tests -q
+.venv/bin/python -m pytest -q tests/test_calibration_and_eval.py tests/test_hyperram.py tests/test_rpcdram.py independent/rpc_fased/tests
 .venv/bin/python scripts/characterize.py
 ```
 

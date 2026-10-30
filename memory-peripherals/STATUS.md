@@ -1,5 +1,33 @@
 # Status
 
+## 2026-10-30 validation update
+
+The current layer-by-layer status matrix and research summary are in
+`docs/VALIDATION_2026-10-30.md`. The separate `IndRpcDramModel` fuzzer was
+also run at the ETH 5 ns, CL=8 clock profile. Its closed-page run emitted
+30,000 commands; the run with one four-bank REF emitted 30,001 events and a
+327,680-CK refresh stall. Both replayed through the independent Python
+checker with zero violations. This makes the FASED and ETH command checks
+comparable at the same programmed tCK, but does not connect FASED directly
+to ETH or make the earlier model development clean-room.
+
+The new `scripts/verify_rpc_trace_evidence.py` checked 971 saved ETH pin
+commands across the standalone, Rocket, BOOM, legal REF, short-REF, and
+intermediate-wait traces. Both selectable refresh readings report no
+violations on the 881 commands in positive traces and one `tREFI` violation
+on the short-REF trace. The intermediate wait produces REF+32 CK: it clears
+one tREFI but remains early under the row-step interpretation. The online SV
+observer agrees with the row-step checker on the offered and earliest legal
+cycles. JSONL packet traces and hashes are generated under
+`results/differential/rpc-traces/` for a separate model comparison.
+
+The normal-mode SV and Python checks and directed ETH REF test passed again.
+The directed ETH bench also held a read response under backpressure for seven
+cycles and checked its data, ID, and response stability.
+The previous 2026-10-28 logs were copied under
+`results/logs/archive/20261028/` before this rerun. Physical device,
+sustained REF-under-load, and alternate ETH PHY-speed checks remain open.
+
 ## 2026-10-28 SV verification baseline
 
 The current handoff is `docs/SV_VERIFICATION_HANDOFF.md`. The HyperRAM
@@ -37,7 +65,9 @@ result is not claimed as clean-room. A 5 ns profile and a pin-packet replay
 were added afterward. Details and the disagreement table are in
 `docs/INDEPENDENT_RPC_TIMING.md`.
 
-The ETH RTL was not modified. Its printed `RPC_PIN_CMD` timestamps were
+The ETH refresh timing FSM was not modified; an isolated ACT-address patch
+to `rpc_cmd_fsm.sv` remains in the controller checkout. Its printed
+`RPC_PIN_CMD` timestamps were
 replayed. An early command is reported and is not delayed.
 
 | Trace | Commands | Violations | Banks | Data |
@@ -54,7 +84,8 @@ read, and an ACT during refresh are each reported by name.
 The directed RTL run is `results/logs/eth_timing_directed_run.log`. With
 N_REF left at 2, ACT follows REF by 16 cycles. That is early for one tREFI
 (20 cycles at 5 ns) and for the row-step window. Programming `n_ref_4` to
-327,680 makes the next ACT legal. The controller RTL was not changed.
+327,680 makes the next ACT legal. This refresh test changed the controller
+configuration registers, not the refresh timing FSM.
 
 `IndRpcDramModel` compiled as its own FASED binary. Its open-page trace
 replays through the Python device with 0 violations on 28,623 commands.

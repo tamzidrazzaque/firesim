@@ -1,5 +1,16 @@
 # Independent EM6GA16L timing model
 
+The current same-clock comparison, neutral pin-trace export, and status
+matrix are in `VALIDATION_2026-10-30.md`. The 5 ns, CL=8 independent FASED
+run emitted 30,000 closed-page commands with zero checker violations; its
+refresh run emitted one additional four-bank REF and also replayed cleanly.
+The actual ETH positive traces emitted 881 commands with zero independent
+violations. The deliberately underprogrammed REF trace has one `tREFI`
+violation under both readings. An intermediate wait produces REF+32 CK and
+is accepted by the one-tREFI reading but rejected by the row-step checker
+and online SV observer. This does not make the older
+FASED derivation clean-room or connect its AXI interface directly to ETH.
+
 This document records the 2026-10-25 run. The 2026-10-28 SV handoff and
 current results are in `SV_VERIFICATION_HANDOFF.md` and the top of `STATUS.md`.
 The old N_REF=2 negative result below is now an intentional regression test;

@@ -1,5 +1,51 @@
 # Testing
 
+## 2026-10-30 same-profile differential checks
+
+`./scripts/run_sv_spec_checks.sh --with-eth` passed after preserving the
+2026-10-28 pin and directed logs in `results/logs/archive/20261028/`.
+The baseline script now runs tests that do not depend on generated fuzzer or
+core logs. The full suite, including those artifact-dependent checks, also
+passed with the existing logs:
+
+```bash
+.venv/bin/python -m pytest -q tests independent/rpc_fased/tests independent/tests_eth_check.py
+.venv/bin/python scripts/verify_rpc_trace_evidence.py
+```
+
+The trace replay checked 21 standalone ETH commands, 394 Rocket commands,
+409 BOOM commands, 57 directed legal-REF commands, 45 deliberately short-REF
+commands, and 45 intermediate-wait commands. The positive traces have no
+independent violations under either refresh reading. The short wait has one
+`tREFI` violation under both readings, offered at cycle 42571. With
+`N_REF=20`, the controller issues the next ACT at REF+32 CK (cycle 42587):
+the one-tREFI reading accepts it, while the row-step checker and SV observer
+reject it with earliest legal cycle 124475. This is a disagreement between
+documented refresh interpretations, not proof of a hardware failure. The
+JSONL exports and SHA-256 report are under
+`results/differential/rpc-traces/`.
+The directed run also held the AXI R response under seven cycles of
+backpressure and checked that valid, data, ID, last, and response remained
+stable (`PASS AXI read backpressure` in its log). The earlier directed logs
+are preserved under `results/logs/archive/20261030_pre_backpressure/`.
+
+The existing `IndRpcDramF2ReqTraceConfig` Verilator binary was run with
+`configs/indrpc-200-closed.conf` and
+`configs/indrpc-200-closed-refresh.conf`, adding `_0` to each runtime
+plusarg name. The runs exited zero and printed `*** PASSED ***` after
+933,979 and 1,237,270 cycles, respectively. The first emitted 30,000
+ACT/column/PRE commands; the second emitted those commands plus one REF at
+cycle 500,000 with a 327,680-CK stall. The exact replay commands are:
+
+```bash
+.venv/bin/python scripts/compare_ind_fased.py results/logs/indrpc_200_closed.log --tck-ps 5000 --cl 8 --page-policy closed
+.venv/bin/python scripts/compare_ind_fased.py results/logs/indrpc_200_closed_refresh.log --tck-ps 5000 --cl 8 --page-policy closed
+```
+
+Both reported zero violations. The fuzzer's success string does not compare
+returned memory bytes. See `docs/VALIDATION_2026-10-30.md` for the status
+matrix, provenance, and remaining boundaries.
+
 ## Current SV handoff (2026-10-28)
 
 Use `docs/SV_VERIFICATION_HANDOFF.md` for the supported modes and the

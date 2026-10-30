@@ -35,6 +35,10 @@ fi
 "$PYTHON_BIN" -m pytest -q \
   tests/test_calibration_and_eval.py tests/test_hyperram.py tests/test_rpcdram.py \
   independent/rpc_fased/tests \
+  independent/tests_eth_check.py::ProfileTests \
+  independent/tests_eth_check.py::PacketTests \
+  independent/tests_eth_check.py::OriginalComparison \
+  independent/tests_eth_check.py::ReplayTests::test_direct_early_commands_name_the_constraint \
   > results/logs/spec_python_run.log 2>&1
 
 if [[ "${1:-}" == "--with-eth" ]]; then

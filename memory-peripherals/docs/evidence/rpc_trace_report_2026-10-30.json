@@ -1,0 +1,287 @@
+[
+  {
+    "trace": "eth_full_pin_run.log",
+    "sha256": "96529a4682171dc9fe8e2fc8f563d95c6d3960e3ebdf915f33a62f719898dadc",
+    "command_count": 21,
+    "first_cycle": 40115,
+    "last_cycle": 42043,
+    "activated_banks": [
+      0
+    ],
+    "observer_violations": [],
+    "independent": {
+      "one_trefi": {
+        "counts": {
+          "reset": 1,
+          "precharge": 6,
+          "mrs": 1,
+          "zq": 1,
+          "activate": 6,
+          "write": 3,
+          "read": 3
+        },
+        "violations": []
+      },
+      "row_step": {
+        "counts": {
+          "reset": 1,
+          "precharge": 6,
+          "mrs": 1,
+          "zq": 1,
+          "activate": 6,
+          "write": 3,
+          "read": 3
+        },
+        "violations": []
+      }
+    },
+    "export": "results/differential/rpc-traces/eth_full_pin_run.jsonl"
+  },
+  {
+    "trace": "chipyard_eth_timing_rocket_stdout.log",
+    "sha256": "6bab25f4435b9b066bff3c25638eb4e1e96db0c74cdc66189c89e91ce4590e97",
+    "command_count": 394,
+    "first_cycle": 40059,
+    "last_cycle": 112219,
+    "activated_banks": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "observer_violations": [],
+    "independent": {
+      "one_trefi": {
+        "counts": {
+          "reset": 1,
+          "precharge": 131,
+          "mrs": 1,
+          "zq": 1,
+          "activate": 130,
+          "read": 121,
+          "write": 9
+        },
+        "violations": []
+      },
+      "row_step": {
+        "counts": {
+          "reset": 1,
+          "precharge": 131,
+          "mrs": 1,
+          "zq": 1,
+          "activate": 130,
+          "read": 121,
+          "write": 9
+        },
+        "violations": []
+      }
+    },
+    "export": "results/differential/rpc-traces/chipyard_eth_timing_rocket_stdout.jsonl"
+  },
+  {
+    "trace": "chipyard_eth_timing_boom_stdout.log",
+    "sha256": "d878ea106d31ee9cd9102be362d39a1f64833f66bd3eac62e29c0d1b542d57d6",
+    "command_count": 409,
+    "first_cycle": 40059,
+    "last_cycle": 109323,
+    "activated_banks": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "observer_violations": [],
+    "independent": {
+      "one_trefi": {
+        "counts": {
+          "reset": 1,
+          "precharge": 136,
+          "mrs": 1,
+          "zq": 1,
+          "activate": 135,
+          "read": 124,
+          "write": 11
+        },
+        "violations": []
+      },
+      "row_step": {
+        "counts": {
+          "reset": 1,
+          "precharge": 136,
+          "mrs": 1,
+          "zq": 1,
+          "activate": 135,
+          "read": 124,
+          "write": 11
+        },
+        "violations": []
+      }
+    },
+    "export": "results/differential/rpc-traces/chipyard_eth_timing_boom_stdout.jsonl"
+  },
+  {
+    "trace": "eth_timing_directed_run.log",
+    "sha256": "b1a298885a3b68e73121f3a52fa1e3115c52e6b58b3dc763f2ac5944307453c9",
+    "command_count": 57,
+    "first_cycle": 40115,
+    "last_cycle": 616275,
+    "activated_banks": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "observer_violations": [],
+    "independent": {
+      "one_trefi": {
+        "counts": {
+          "reset": 1,
+          "precharge": 17,
+          "mrs": 1,
+          "zq": 1,
+          "activate": 17,
+          "write": 6,
+          "read": 11,
+          "refresh": 3
+        },
+        "violations": []
+      },
+      "row_step": {
+        "counts": {
+          "reset": 1,
+          "precharge": 17,
+          "mrs": 1,
+          "zq": 1,
+          "activate": 17,
+          "write": 6,
+          "read": 11,
+          "refresh": 3
+        },
+        "violations": []
+      }
+    },
+    "export": "results/differential/rpc-traces/eth_timing_directed_run.jsonl"
+  },
+  {
+    "trace": "eth_timing_directed_negative.log",
+    "sha256": "e1577ea1a127202c6d5afa0b326487be9126d320a421b6423d061cce90eacc5c",
+    "command_count": 45,
+    "first_cycle": 40115,
+    "last_cycle": 42571,
+    "activated_banks": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "observer_violations": [
+      {
+        "constraint": "tREFI",
+        "offered_cycle": 42571,
+        "earliest_legal_cycle": 124475
+      }
+    ],
+    "independent": {
+      "one_trefi": {
+        "counts": {
+          "reset": 1,
+          "precharge": 14,
+          "mrs": 1,
+          "zq": 1,
+          "activate": 14,
+          "write": 6,
+          "read": 7,
+          "refresh": 1
+        },
+        "violations": [
+          {
+            "constraint": "tREFI",
+            "offered_cycle": 42571,
+            "earliest_legal_cycle": 42575,
+            "command": "activate",
+            "detail": "one_trefi one-shot busy window (20 cycles, 1 banks)"
+          }
+        ]
+      },
+      "row_step": {
+        "counts": {
+          "reset": 1,
+          "precharge": 14,
+          "mrs": 1,
+          "zq": 1,
+          "activate": 14,
+          "write": 6,
+          "read": 7,
+          "refresh": 1
+        },
+        "violations": [
+          {
+            "constraint": "tREFI",
+            "offered_cycle": 42571,
+            "earliest_legal_cycle": 124475,
+            "command": "activate",
+            "detail": "row_step one-shot busy window (81920 cycles, 1 banks)"
+          }
+        ]
+      }
+    },
+    "export": "results/differential/rpc-traces/eth_timing_directed_negative.jsonl"
+  },
+  {
+    "trace": "eth_timing_directed_borderline.log",
+    "sha256": "32e48451f68346f370bf9619a9b892222e15445c1a584326249d58b6de03e783",
+    "command_count": 45,
+    "first_cycle": 40115,
+    "last_cycle": 42587,
+    "activated_banks": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "observer_violations": [
+      {
+        "constraint": "tREFI",
+        "offered_cycle": 42587,
+        "earliest_legal_cycle": 124475
+      }
+    ],
+    "independent": {
+      "one_trefi": {
+        "counts": {
+          "reset": 1,
+          "precharge": 14,
+          "mrs": 1,
+          "zq": 1,
+          "activate": 14,
+          "write": 6,
+          "read": 7,
+          "refresh": 1
+        },
+        "violations": []
+      },
+      "row_step": {
+        "counts": {
+          "reset": 1,
+          "precharge": 14,
+          "mrs": 1,
+          "zq": 1,
+          "activate": 14,
+          "write": 6,
+          "read": 7,
+          "refresh": 1
+        },
+        "violations": [
+          {
+            "constraint": "tREFI",
+            "offered_cycle": 42587,
+            "earliest_legal_cycle": 124475,
+            "command": "activate",
+            "detail": "row_step one-shot busy window (81920 cycles, 1 banks)"
+          }
+        ]
+      }
+    },
+    "export": "results/differential/rpc-traces/eth_timing_directed_borderline.jsonl"
+  }
+]

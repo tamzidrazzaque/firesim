@@ -8,7 +8,7 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-root = Path("/scratch/trazzaque/memory-peripherals")
+root = Path.cwd().parent
 sys.path[:0] = [str(root / "independent"), str(root / "src")]
 from rpc_fased.check import parse_pin_log, replay
 from rpc_fased.profiles import profile_for

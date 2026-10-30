@@ -1,5 +1,14 @@
 # SV verification handoff: HyperRAM and RPC DRAM
 
+The latest layer-by-layer validation status is in
+`VALIDATION_2026-10-30.md`. For an additional independent timing check of
+the observed ETH commands, run
+`.venv/bin/python scripts/verify_rpc_trace_evidence.py` after producing the
+pin logs. It exports raw packet and original-cycle JSONL traces for a second
+implementation to consume. The FASED scheduler files are under
+`fased/scala/midas/models/dram/`; they schedule AXI requests and are not
+drop-in SV pin devices.
+
 This repository provides **digital simulation models for the supported modes**,
 not a full electrical or all-mode vendor signoff model. Use the exact part and
 mode below when comparing a controller against them. Keep the timing observer
@@ -66,14 +75,18 @@ tRWR, early tRP/tRH/tCSS, array wrap, and tCSM overrun. The RPC observer bench c
 minimum and off-grid tPPD, REF versus tRC and read-data end, rejected-state
 preservation, reserved MRS, BUSY end, high-temperature LP bank limit, and
 empty bank mask. The directed ETH test checks 1-, 2-, and 4-bank refresh,
-BUSY strobes, readback, and an intentional too-short REF setting. Rocket and
+BUSY strobes, readback, AXI read backpressure, an intentional too-short REF
+setting, and an intermediate REF wait that separates the two documented
+refresh interpretations. Rocket and
 BOOM run `workloads/rpc_banks.riscv` through the ETH controller and digital
 RPC model, with the observer set to fatal on violations. Logs go under
 `results/logs/`; they are generated evidence, not part of the source commit.
 The latest runs reached the workload success branch with zero observer
 violations: Rocket emitted 394 pin commands and BOOM 409, both across banks
 0–3. The directed ETH run read data back after 1-, 2-, and 4-bank REF and
-the intentionally underprogrammed negative run reported one `tREFI` violation.
+the intentionally underprogrammed negative run reported one `tREFI` violation
+under both readings. The intermediate wait was accepted under one-tREFI and
+rejected under row-step; only a device waveform can settle its actual legality.
 The standalone models need Verilator and Python. The ETH runs use the isolated
 controller checkout at `3ce565470a60e171965a1bc94ce5b0a61c2003a6`;
 `scripts/setup_eth_deps.sh` fetches its declared public dependencies and

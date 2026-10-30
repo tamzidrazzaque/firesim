@@ -1,29 +1,37 @@
 #!/usr/bin/env python3
 """Replay INDCMD/INDREF lines through the independent Python device.
 
-FASED cycles are the model's tCK. This is not the 5 ns ETH pin clock.
+FASED cycles are the model's programmed tCK; choose the matching profile.
 A command the scheduler emitted is legal when the device accepts it.
 The device does not move an early command forward.
 """
 
 from __future__ import annotations
 
+import argparse
 import re
 import sys
 from pathlib import Path
 
-ROOT = Path("/scratch/trazzaque/memory-peripherals")
+ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "independent"))
 
 from rpc_fased.device import Activate, Precharge, Read, Refresh, RpcDram, Write
-from rpc_fased.params import GEOMETRY, P
+from rpc_fased.params import GEOMETRY
+from rpc_fased.profiles import profile_for
 
 CMD = re.compile(r"INDCMD,\s*(\d+),\s*(\d+),\s*(\d+),\s*(\d+)")
 REF = re.compile(r"INDREF,\s*(\d+),\s*(\d+)")
 
 
 def main() -> int:
-    path = Path(sys.argv[1])
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("log", type=Path)
+    parser.add_argument("--tck-ps", type=int, default=1250)
+    parser.add_argument("--cl", type=int, default=11)
+    parser.add_argument("--page-policy", choices=("open", "closed"), default="open")
+    args = parser.parse_args()
+    path = args.log
     text = path.read_text(errors="replace")
     events: list[tuple[int, str, tuple]] = []
     for line in text.splitlines():
@@ -35,9 +43,13 @@ def main() -> int:
         ref = REF.search(line)
         if ref:
             events.append((int(ref.group(1)), "ref", (int(ref.group(2)),)))
+    if not events:
+        print(f"no INDCMD or INDREF events in {path}", file=sys.stderr)
+        return 1
     events.sort(key=lambda item: (item[0], 0 if item[1] == "ref" else 1))
-    dev = RpcDram(page_policy="open", refresh_occupancy="row_step")
-    ready = dev.initialize()
+    profile = profile_for(args.tck_ps, cl=args.cl)
+    dev = RpcDram(page_policy=args.page_policy, timing=profile, refresh_occupancy="row_step")
+    ready = dev.initialize(cl=args.cl, nwr=profile.nWR_MIN)
     bad = 0
     counts: dict[str, int] = {}
     for cycle, kind, payload in events:
@@ -47,7 +59,7 @@ def main() -> int:
             continue
         if kind == "ref":
             (stall,) = payload
-            window = GEOMETRY.rows * P.tREFI_FST * 4
+            window = GEOMETRY.rows * profile.tREFI_FST * 4
             if stall != window:
                 print(f"refresh stall {stall} != row-step {window}")
                 bad += 1
@@ -75,7 +87,8 @@ def main() -> int:
             bad += 1
             if bad <= 12:
                 print(f"reject {kind} {payload} at {cycle}: {result.violations}")
-    print(f"events={len(events)} counts={counts} violations={bad}")
+    print(f"tck_ps={profile.tck_ps} cl={profile.CL} page_policy={args.page_policy} "
+          f"events={len(events)} counts={counts} violations={bad}")
     return 1 if bad else 0
 
 

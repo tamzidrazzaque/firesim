@@ -31,5 +31,8 @@ verilator --binary --timing -DSYNTHESIS -Wno-fatal \
 ./rtl/obj_eth_timing/Vtb_eth_timing > results/logs/eth_timing_directed_run.log 2>&1
 ./rtl/obj_eth_timing/Vtb_eth_timing +negative_refresh \
   > results/logs/eth_timing_directed_negative.log 2>&1
+./rtl/obj_eth_timing/Vtb_eth_timing +borderline_refresh \
+  > results/logs/eth_timing_directed_borderline.log 2>&1
 rg 'PASS|RPC_TIMING_VIOLATION' results/logs/eth_timing_directed_run.log \
-  results/logs/eth_timing_directed_negative.log | tail -20
+  results/logs/eth_timing_directed_negative.log \
+  results/logs/eth_timing_directed_borderline.log | tail -20
