@@ -1,0 +1,12 @@
+{"cycle": 160000, "packet_hex": "00010000", "note": "PU RESET after 200 us of stable clock"}
+{"cycle": 164000, "packet_hex": "000003c4", "note": "PRE all banks after tRESET"}
+{"cycle": 164011, "packet_hex": "000002d2", "note": "MRS CL=11 nWR=8 Zout=23.7 ohm after tRP"}
+{"cycle": 164023, "packet_hex": "00010001", "note": "ZQINIT after tMOD"}
+{"cycle": 165623, "packet_hex": "00540005", "note": "ACT bank 0 row 0x02a after tZQINIT"}
+{"cycle": 165631, "packet_hex": "0000a000", "note": "RD bank 0 WORD 5, deliberately early (tRCD)"}
+{"cycle": 165639, "packet_hex": "0000a000", "note": "RD bank 0 WORD 5 on the first legal 8-cycle slot"}
+{"cycle": 165671, "packet_hex": "0000c001", "note": "WR bank 0 WORD 6 after the read burst and tBESL"}
+{"cycle": 165703, "packet_hex": "00000044", "note": "PRE bank 0, deliberately early (tBESL after write)"}
+{"cycle": 165711, "packet_hex": "00000044", "note": "PRE bank 0 on the first legal slot"}
+{"cycle": 165722, "packet_hex": "00000046", "note": "REF bank 0, one-shot FST, after tRP"}
+{"cycle": 493646, "packet_hex": "0200000d", "note": "ACT bank 1 row 0x100 when refresh reading 1 has completed"}

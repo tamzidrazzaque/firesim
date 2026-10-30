@@ -1,5 +1,44 @@
 # Testing
 
+## 2026-10-30 frozen Chisel checker
+
+The checker lives in `independent/cleanroom/` and is not part of the
+earlier `independent/rpc_fased` package. Its own suite is:
+
+```bash
+cd independent/cleanroom
+# JDK 11, sbt 1.10.2, from a workspace that already resolved Chisel 3.6.0
+sbt -batch test
+sbt -batch "runMain rpc.Replay --tck-ps 1250 --refresh-select 0 spec/selftest.jsonl"
+```
+
+The saved run is `independent/cleanroom/results/sbt-test.txt` (63 tests,
+0 failures). ETH pin logs are replayed, without moving their cycles, by:
+
+```bash
+python3 scripts/run_chisel_eth_replay.py --skip-chisel \
+  --cleanroom independent/cleanroom \
+  results/logs/eth_full_pin_run.log \
+  results/logs/chipyard_eth_timing_rocket_stdout.log \
+  results/logs/chipyard_eth_timing_boom_stdout.log \
+  results/logs/eth_timing_directed_run.log \
+  results/logs/eth_timing_directed_negative.log \
+  results/logs/eth_timing_directed_borderline.log \
+  results/logs/eth_timing_directed_stress.log
+```
+
+The command above exports JSONL and runs the older Python checker. The
+Chisel results already collected from those JSONL files are
+`results/differential/chisel-replay/chisel_summary.json`. Replaying
+again requires the cleanroom's sbt cache or a fresh `sbt` resolve, then
+`runMain rpc.Replay --tck-ps 5000 --refresh-select <0|1|2> <jsonl>`.
+The script exchanges the two 16-bit packet halves so the pin log matches
+`independent/cleanroom/docs/PACKET.md`.
+
+`./scripts/run_eth_timing_directed.sh` now also passes `+stress`. Rocket
+and BOOM were rerun from the existing simulators; the pin commands match
+`results/logs/chipyard_eth_timing_{rocket,boom}_stdout.log`.
+
 ## 2026-10-30 same-profile differential checks
 
 `./scripts/run_sv_spec_checks.sh --with-eth` passed after preserving the

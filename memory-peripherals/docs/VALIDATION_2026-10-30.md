@@ -1,5 +1,9 @@
 # Memory-model validation status, 2026-10-30
 
+The later ETH-command replay through the frozen specification checker is
+`docs/SAGAR_INDEPENDENT_FASED_VALIDATION.md`. The matrix below is the
+record of the earlier same-rule comparison and is unchanged.
+
 This report separates the FireSim transaction schedulers, digital pin models,
 the production ETH controller path, and physical hardware. The manufacturer
 documents are [Etron EM6GA16L Rev. 1.4](https://etron.com/wp-content/uploads/2022/04/EM6GA16LGDBXCAEA-RPC1-DRAM-Induatrial_Rev.-1.4.pdf)

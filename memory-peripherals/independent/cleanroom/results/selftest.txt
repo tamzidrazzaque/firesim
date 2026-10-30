@@ -1,0 +1,106 @@
+# Replay self-check for spec/selftest.jsonl
+# Toolchain: JDK 11, Scala 2.13.10, Chisel 3.6.0, sbt 1.10.2. Legality is peeked from rpc.RpcTimingChecker in a chiseltest (treadle) simulation.
+# Each block shows the command, its output (sbt log lines kept), and the process exit code.
+# Run 1 is the required command. Run 2 uses a second allowed clock period (tCK = 2500 ps, the CL8-400MHz row of Table 11-3).
+# Runs 3 and 4 show the two non-zero refresh readings at tCK = 1250 ps.
+
+## Run 1
+$ sbt "runMain rpc.Replay --tck-ps 1250 --refresh-select 0 spec/selftest.jsonl"
+Picked up JAVA_TOOL_OPTIONS: -Djava.io.tmpdir=/tmp/rpc-spec-cleanroom/tmp
+Picked up JAVA_TOOL_OPTIONS: -Djava.io.tmpdir=/tmp/rpc-spec-cleanroom/tmp
+[info] welcome to sbt 1.10.2 (Ubuntu Java 11.0.32.1)
+[info] loading project definition from /tmp/rpc-spec-cleanroom/project
+[info] loading settings for project root from build.sbt ...
+[info] set current project to rpc-spec-model (in build file:/tmp/rpc-spec-cleanroom/)
+[info] running (fork) rpc.Replay --tck-ps 1250 --refresh-select 0 spec/selftest.jsonl
+Picked up JAVA_TOOL_OPTIONS: -Djava.io.tmpdir=/tmp/rpc-spec-cleanroom/tmp
+ACCEPT cycle=160000 op=RESET
+ACCEPT cycle=164000 op=PRE
+ACCEPT cycle=164011 op=MRS
+ACCEPT cycle=164023 op=ZQ
+ACCEPT cycle=165623 op=ACT
+VIOLATION constraint=TRCD offered=165631 earliest=165639 op=RD
+ACCEPT cycle=165639 op=RD
+ACCEPT cycle=165671 op=WR
+VIOLATION constraint=TBESL_WRITE offered=165703 earliest=165711 op=PRE
+ACCEPT cycle=165711 op=PRE
+ACCEPT cycle=165722 op=REF
+INTERPRETATION constraint=REFRESH_BUSY offered=493646 earliest=565966 op=ACT detail=refresh-completion-not-specified;rs1-earliest=493646;rs2-earliest=565966;state-updated-as-if-refresh-complete
+[success] Total time: 3 s, completed Oct 30, 2026, 2:01:59 PM
+exit code: 0
+
+## Run 2
+$ sbt "runMain rpc.Replay --tck-ps 2500 --refresh-select 0 spec/selftest.jsonl"
+Picked up JAVA_TOOL_OPTIONS: -Djava.io.tmpdir=/tmp/rpc-spec-cleanroom/tmp
+Picked up JAVA_TOOL_OPTIONS: -Djava.io.tmpdir=/tmp/rpc-spec-cleanroom/tmp
+[info] welcome to sbt 1.10.2 (Ubuntu Java 11.0.32.1)
+[info] loading project definition from /tmp/rpc-spec-cleanroom/project
+[info] loading settings for project root from build.sbt ...
+[info] set current project to rpc-spec-model (in build file:/tmp/rpc-spec-cleanroom/)
+[info] running (fork) rpc.Replay --tck-ps 2500 --refresh-select 0 spec/selftest.jsonl
+Picked up JAVA_TOOL_OPTIONS: -Djava.io.tmpdir=/tmp/rpc-spec-cleanroom/tmp
+ACCEPT cycle=160000 op=RESET
+ACCEPT cycle=164000 op=PRE
+ACCEPT cycle=164011 op=MRS
+ACCEPT cycle=164023 op=ZQ
+ACCEPT cycle=165623 op=ACT
+ACCEPT cycle=165631 op=RD
+VIOLATION constraint=TBESL_READ offered=165639 earliest=165663 op=RD
+ACCEPT cycle=165671 op=WR
+VIOLATION constraint=TBESL_WRITE offered=165703 earliest=165711 op=PRE
+ACCEPT cycle=165711 op=PRE
+ACCEPT cycle=165722 op=REF
+ACCEPT cycle=493646 op=ACT
+[success] Total time: 3 s, completed Oct 30, 2026, 2:02:04 PM
+exit code: 0
+
+## Run 3
+$ sbt "runMain rpc.Replay --tck-ps 1250 --refresh-select 1 spec/selftest.jsonl"
+Picked up JAVA_TOOL_OPTIONS: -Djava.io.tmpdir=/tmp/rpc-spec-cleanroom/tmp
+Picked up JAVA_TOOL_OPTIONS: -Djava.io.tmpdir=/tmp/rpc-spec-cleanroom/tmp
+[info] welcome to sbt 1.10.2 (Ubuntu Java 11.0.32.1)
+[info] loading project definition from /tmp/rpc-spec-cleanroom/project
+[info] loading settings for project root from build.sbt ...
+[info] set current project to rpc-spec-model (in build file:/tmp/rpc-spec-cleanroom/)
+[info] running (fork) rpc.Replay --tck-ps 1250 --refresh-select 1 spec/selftest.jsonl
+Picked up JAVA_TOOL_OPTIONS: -Djava.io.tmpdir=/tmp/rpc-spec-cleanroom/tmp
+ACCEPT cycle=160000 op=RESET
+ACCEPT cycle=164000 op=PRE
+ACCEPT cycle=164011 op=MRS
+ACCEPT cycle=164023 op=ZQ
+ACCEPT cycle=165623 op=ACT
+VIOLATION constraint=TRCD offered=165631 earliest=165639 op=RD
+ACCEPT cycle=165639 op=RD
+ACCEPT cycle=165671 op=WR
+VIOLATION constraint=TBESL_WRITE offered=165703 earliest=165711 op=PRE
+ACCEPT cycle=165711 op=PRE
+ACCEPT cycle=165722 op=REF
+ACCEPT cycle=493646 op=ACT
+[success] Total time: 3 s, completed Oct 30, 2026, 2:02:10 PM
+exit code: 0
+
+## Run 4
+$ sbt "runMain rpc.Replay --tck-ps 1250 --refresh-select 2 spec/selftest.jsonl"
+Picked up JAVA_TOOL_OPTIONS: -Djava.io.tmpdir=/tmp/rpc-spec-cleanroom/tmp
+Picked up JAVA_TOOL_OPTIONS: -Djava.io.tmpdir=/tmp/rpc-spec-cleanroom/tmp
+[info] welcome to sbt 1.10.2 (Ubuntu Java 11.0.32.1)
+[info] loading project definition from /tmp/rpc-spec-cleanroom/project
+[info] loading settings for project root from build.sbt ...
+[info] set current project to rpc-spec-model (in build file:/tmp/rpc-spec-cleanroom/)
+[info] running (fork) rpc.Replay --tck-ps 1250 --refresh-select 2 spec/selftest.jsonl
+Picked up JAVA_TOOL_OPTIONS: -Djava.io.tmpdir=/tmp/rpc-spec-cleanroom/tmp
+ACCEPT cycle=160000 op=RESET
+ACCEPT cycle=164000 op=PRE
+ACCEPT cycle=164011 op=MRS
+ACCEPT cycle=164023 op=ZQ
+ACCEPT cycle=165623 op=ACT
+VIOLATION constraint=TRCD offered=165631 earliest=165639 op=RD
+ACCEPT cycle=165639 op=RD
+ACCEPT cycle=165671 op=WR
+VIOLATION constraint=TBESL_WRITE offered=165703 earliest=165711 op=PRE
+ACCEPT cycle=165711 op=PRE
+ACCEPT cycle=165722 op=REF
+VIOLATION constraint=REFRESH_BUSY offered=493646 earliest=565966 op=ACT
+[success] Total time: 3 s, completed Oct 30, 2026, 2:02:16 PM
+exit code: 0
+

@@ -1,0 +1,103 @@
+$ sbt test
+Picked up JAVA_TOOL_OPTIONS: -Djava.io.tmpdir=/tmp/rpc-spec-cleanroom/tmp
+Picked up JAVA_TOOL_OPTIONS: -Djava.io.tmpdir=/tmp/rpc-spec-cleanroom/tmp
+[info] welcome to sbt 1.10.2 (Ubuntu Java 11.0.32.1)
+[info] loading project definition from /tmp/rpc-spec-cleanroom/project
+[info] loading settings for project root from build.sbt ...
+[info] set current project to rpc-spec-model (in build file:/tmp/rpc-spec-cleanroom/)
+[info] ToolchainSpec:
+[info] chisel
+[info] - should simulate a wire
+[info] ArrayModelSpec:
+[info] ArrayModel
+[info] - should apply write masks to the first and last WORD only
+[info] - should OR both masks for a single-WORD burst
+[info] RpcTimingChecker with ArrayModel
+[info] - should change array contents only for accepted commands
+[info] PacketDecodeSpec:
+[info] RpcTimingChecker
+[info] - should decode every Table 7-1 opcode
+[info] - should extract bank, row, column and burst length fields
+[info] Packet
+[info] - should place fields at the documented DB positions
+[info] RpcConfigSpec:
+[info] RpcConfig
+[info] - should list the five tCK(avg) rows of the single Speed-1600 column
+[info] - should convert nanosecond minima with ceil(time_ps / tck_ps)
+[info] - should keep cycle minima in cycles
+[info] - should allow a CL only at or above its tCK(avg) minimum
+[info] - should derive both refresh-completion readings from section 5
+[info] InitSpec:
+[info] power-up initialization (section 4, Figures 4-1 and 4-2)
+[info] - should enforce clock stability, tRESET, tRP, tMOD and tZQINIT at their boundaries (tCK 1250 ps)
+[info] - should apply the same sequence at every tCK(avg) row
+[info] - should reject an MRS whose CL is reserved or too fast for tCK
+[info] - should require PRE-all and MRS but not a second ZQINIT after a later reset (Figure 2-3)
+[info] - should reset mode registers to the Table 7-2 defaults
+[info] RefreshSpec:
+[info] refresh (section 5, Tables 7-5 and 11-3)
+[info] - should report an INTERPRETATION under refreshSelect 0 while the readings disagree
+[info] - should report a VIOLATION under refreshSelect 0 when early under every reading
+[info] - should accept once both readings have completed under refreshSelect 0
+[info] - should collapse to the rows x tREFI reading under refreshSelect 1
+[info] - should collapse to the 64 ms reading under refreshSelect 2
+[info] - should apply a command after an INTERPRETATION as if refresh had finished
+[info] - should scale with bank count, REFOP and CSRFX
+[info] - should convert refresh time at another clock period (tCK 2500 ps)
+[info] - should convert the one-shot FST single-bank bound at every tCK(avg) row
+[info] - should reject a reserved REFOP and an empty bank mask
+[info] DataTimingSpec:
+[info] burst data timing (sections 2.5, 2.6, 3.3, 3.10, Figures 12-2, 12-3, 12-6, 12-11)
+[info] - should hold the bus after a read burst for tBESL(read) + STB lead
+[info] - should scale the read window with the burst count
+[info] - should hold the bus after a write burst for tBESL(write) + STB lead
+[info] - should take RL from the CL programmed by MRS (tCK 4000 ps)
+[info] - should use the same latency for writes (WL = RL)
+[info] - should enforce tMRD between MRS commands and tMOD before other commands
+[info] - should enforce tWR from the end of write data when it is the binding bound
+[info] - should refuse reads while Zout is open (section 4 step 4, section 2.13)
+[info] ReplaySpec:
+[info] spec/selftest.jsonl
+[info] - should match the Packet encoders
+[info] Replay
+[info] - should report legal and early commands at tCK 1250 ps with refresh-select 0
+[info] - should collapse the refresh reading for refresh-select 1 and 2
+[info] - should convert the same cycles at tCK 2500 ps
+[info] - should print na when no wait makes the command legal, and ignore extra fields and blank lines
+[info] - should accept every tCK(avg) row and refresh-select value
+[info] - should exit 2 on usage errors
+[info] - should exit 3 on unreadable or malformed input without printing partial results
+[info] - should accept the largest 64-bit cycle
+[info] UtrZqSpec:
+[info] utility register mode (section 2.14, Table 7-6)
+[info] - should allow only RD, UTR and RESET while UTR mode is on
+[info] - should require all banks idle before entering UTR mode
+[info] ZQ calibration (Tables 7-4 and 11-3)
+[info] - should hold the device for tZQCS, tZQCL and tZQRESET
+[info] - should scale ZQ times with tCK (tCK 4000 ps: tZQCS = 23)
+[info] commands outside the modeled scope
+[info] - should report power-down entries as INTERPRETATION without changing state
+[info] - should reject undefined opcodes at any time
+[info] - should reject a clock period below tCK(avg) min
+[info] - should report the idle tPPD when two packets are closer than 4 cycles
+[info] BankTimingSpec:
+[info] bank timing and 8-cycle clocking (Table 11-3, sections 2.8, 2.9, 2.15)
+[info] - should hold RD until tRCD rounded up to the 8-cycle grid (tCK 1250 ps: tRCD = 11)
+[info] - should let tRCD scale with tCK (tCK 4000 ps: tRCD = 4, grid = 8)
+[info] - should report the next grid slot for an off-grid command in Activate state
+[info] - should enforce tRRD between ACTs of different banks
+[info] - should enforce tRAS before PRE and tRP before re-activating
+[info] - should keep 8-cycle clocking until the last precharge completes (section 2.9)
+[info] - should use the 4-cycle idle tPPD once the device is Idle
+[info] - should enforce tRC from ACT to REF
+[info] bank state (Tables 8-3 and 8-4)
+[info] - should reject commands that waiting cannot make legal
+[info] - should not update bank state for an early command
+[info] - should leave every bank precharged after REF
+[info] Run completed in 17 seconds, 60 milliseconds.
+[info] Total number of tests run: 63
+[info] Suites: completed 10, aborted 0
+[info] Tests: succeeded 63, failed 0, canceled 0, ignored 0, pending 0
+[info] All tests passed.
+[success] Total time: 18 s, completed Oct 30, 2026, 2:02:57 PM
+exit code: 0

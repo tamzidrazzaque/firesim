@@ -1,5 +1,17 @@
 # Status
 
+## 2026-10-30 Sagar independent-checker experiment
+
+`docs/SAGAR_INDEPENDENT_FASED_VALIDATION.md` records a separate
+specification-only Chisel checker and the replay of observed ETH pin
+commands through it. Rocket and BOOM were rerun: both reached the
+TestDriver success path, and both pin streams match the saved logs
+(394 and 409 commands) with zero checker violations. The short and
+intermediate refresh waits are rejected under every reading the new
+checker derived. The programmed row-step waits are 45 cycles short of
+that checker's shorter completion formula. The checker sources were
+not edited to remove those violations.
+
 ## 2026-10-30 validation update
 
 The current layer-by-layer status matrix and research summary are in

@@ -1,0 +1,7 @@
+Rocket first-RD mutations through rpc.Replay at tCK=5000 ps, refreshSelect=0.
+rd at 41562 (ACT+15): one TPPD_ACTIVE, earliest 41563.
+rd at 41555 (ACT+8): no violations.
+rd at 41554 (ACT+7): one TPPD_ACTIVE, earliest 41555.
+Violation lines:
+VIOLATION constraint=TPPD_ACTIVE offered=41562 earliest=41563 op=RD
+VIOLATION constraint=TPPD_ACTIVE offered=41554 earliest=41555 op=RD

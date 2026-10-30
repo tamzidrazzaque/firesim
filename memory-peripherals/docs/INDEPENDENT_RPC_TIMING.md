@@ -1,5 +1,10 @@
 # Independent EM6GA16L timing model
 
+The frozen specification checker and its replay of actual ETH pin
+commands are recorded in `docs/SAGAR_INDEPENDENT_FASED_VALIDATION.md`.
+The notes below describe the earlier Python checker and
+`IndRpcDramModel`. They are not that later derivation.
+
 The current same-clock comparison, neutral pin-trace export, and status
 matrix are in `VALIDATION_2026-10-30.md`. The 5 ns, CL=8 independent FASED
 run emitted 30,000 closed-page commands with zero checker violations; its

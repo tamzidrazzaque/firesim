@@ -1,0 +1,8419 @@
+ 
+
+ 
+ 
+ 
+
+256Mb High Bandwidth RPC DRAM® 
+
+ 
+
+Model 
+EM6GA16LGDA  
+EM6GA16LBXA 
+EM6GA16LCAEA 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+Advance 
+Revision 1.4 
+October 16, 2024 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    2 
+
+                                                                                                             
+
+Contents 
+
+1 
+Introduction ............................................................................................................................................... 5 
+1.1 Features ............................................................................................................................................................. 5 
+1.2 Product Overview ............................................................................................................................................... 6 
+1.3 State Diagram .................................................................................................................................................... 7 
+1.4 Block Diagram .................................................................................................................................................... 8 
+1.5 FBGA Ball Assignment (Top View) .................................................................................................................... 9 
+1.6 WLCSP (Wafer Level Chip Scale) Package (Top View) .................................................................................. 10 
+2 
+Functional Description........................................................................................................................... 12 
+2.1 Clocking/Timing ................................................................................................................................................ 12 
+2.2 Commencing cycles from Idle State via Request Packet ................................................................................. 13 
+2.3 Data Strobes: DQS, DQS# ............................................................................................................................... 13 
+2.4 Bandwidth and Minimum Core Transfer Quantities: ......................................................................................... 14 
+2.5 Burst Read Cycle ............................................................................................................................................. 15 
+2.6 Burst Write Cycle ............................................................................................................................................. 16 
+2.7 Byte Write Masking (DM) ................................................................................................................................. 17 
+2.8 Activate State ................................................................................................................................................... 19 
+2.9 Idle State .......................................................................................................................................................... 19 
+2.10 Reset State .................................................................................................................................................... 20 
+2.11 Power Down (PD) State ................................................................................................................................. 22 
+2.12 Deep Power Down (DPD) State ..................................................................................................................... 23 
+2.13 On Chip Termination ...................................................................................................................................... 24 
+2.14 UTR (Utility Register Read) ............................................................................................................................ 28 
+2.15 Cycle Templates: ........................................................................................................................................... 30 
+3 
+Command Description and Operation .................................................................................................. 31 
+3.1 Addressing for Parallel Mode Operation: ......................................................................................................... 31 
+3.2 STB Pin: Serial Mode Addressing and Control: ................................................................................................ 31 
+3.3 Cycle Start and Command/Address Streaming via STB Pin: ........................................................................... 32 
+3.4 Serial Packet Sampling Format ........................................................................................................................ 34 
+3.5 Toggling Read/Write Mode: .............................................................................................................................. 35 
+3.6 Retiring Address Streaming Cycles: ................................................................................................................. 37 
+3.7 Pipelined Activation: ......................................................................................................................................... 37 
+3.8 Address / Command Decoding and CAS Latency ............................................................................................ 39 
+3.9 Instruction Formats .......................................................................................................................................... 39 
+3.10 Burst Count and Burst Length ........................................................................................................................ 40 
+3.11 ZQ Calibration Command ............................................................................................................................... 41 
+4 
+Power-Up Initialization ........................................................................................................................... 42 
+5 
+Refreshing the DRAM Memory Array ................................................................................................... 44 
+5.1 One Shot Mode Refresh:.................................................................................................................................. 45 
+5.2 Loop Mode Refresh : ........................................................................................................................................ 46 
+6 
+Multi Rank ............................................................................................................................................... 47 
+7 
+Parallel/Serial Packet Formats & Op-code Assignments ................................................................... 50 
+8 
+Command to Command Truth Tables .................................................................................................. 54 
+9 
+Absolute Maximum Ratings .................................................................................................................. 56 
+10 
+Input/Output Capacitance ...................................................................................................................... 56 
+11 
+D.C. & A.C. Operating Conditions ......................................................................................................... 57 
+11.1 Operating Conditions...................................................................................................................................... 57 
+11.2 D.C. Parameters ............................................................................................................................................ 58 
+11.3 A.C. Parameters ............................................................................................................................................. 59 
+12 
+Timing Waveform ................................................................................................................................... 61 
+13 
+Package Outline Information ................................................................................................................. 69 
+13.1 Package Dimensions...................................................................................................................................... 69 
+13.2 Package Outline 96-Ball FBGA (9 x 13 x 1.2mm) .......................................................................................... 70 
+13.3 Package Outline 50-Ball WLCSP (1.96 x 4.63 x 0.545mm) ........................................................................... 71 
+ 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    3 
+
+ 
+
+List of Figures 
+
+Figure 1-1. RPC State Diagram ............................................................................................................................................... 7 
+Figure 1-2. Block Diagram ....................................................................................................................................................... 8 
+Figure 1-3. 96-Ball FBGA (x16) ............................................................................................................................................... 9 
+Figure 1-4. 50-Ball WLCSP (x16) .......................................................................................................................................... 10 
+Figure 2-1. Request Packet Timing Relationships ................................................................................................................. 12 
+Figure 2-2. Write Mask cycles after Serial Toggle R/W command (WL=12, AL=1, CL=11) .................................................... 17 
+Figure 2-3. Parallel Reset Entry & Exit .................................................................................................................................. 20 
+Figure 2-4. Serial Reset Entry & Exit ..................................................................................................................................... 21 
+Figure 2-5. Power-Down Entry & Exit .................................................................................................................................... 22 
+Figure 2-6. Deep Power-Down Entry & Exit .......................................................................................................................... 23 
+Figure 2-7. Point to Point Signaling Environment using Parallel or series termination on DRAM .......................................... 25 
+Figure 2-8. ODT Function, Parallel Read (CL = 10, BC = 0) .................................................................................................. 26 
+Figure 2-9. ODT Function, Power Down Mode, ODTPD = 0 ................................................................................................. 26 
+Figure 2-10. ODT Function, Power Down Mode, ODTPD = 1 ............................................................................................... 27 
+Figure 2-11. ODT Function, Refresh Mode ............................................................................................................................ 27 
+Figure 2-12. UTREN Block Diagram...................................................................................................................................... 28 
+Figure 2-13. UTR Timing ....................................................................................................................................................... 29 
+Figure 2-14. Cycle Templates ................................................................................................................................................ 30 
+Figure 3-1. Burst Read to Serial Command ........................................................................................................................... 33 
+Figure 3-2. Serial Packet Sampling ....................................................................................................................................... 34 
+Figure 3-3. Toggle Read/Write ............................................................................................................................................... 36 
+Figure 3-4. Seamless Burst Transfer (2 Bank Interleave) ...................................................................................................... 38 
+Figure 4-1. Power-Up Initialization Sequence ....................................................................................................................... 43 
+Figure 4-2. Power-Up Reset Entry ........................................................................................................................................ 43 
+Figure 5-1. PAR-OS_REF, Entry and Exit of OneShot Refresh in Idle or Standby state ........................................................ 45 
+Figure 5-2. SER-OS_REF, Entry and Exit of OneShot Refresh in Serial Read Burst state ................................................... 45 
+Figure 5-3. SER-OS_REF, Entry and Exit of OneShot Refresh in Serial Write Burst state .................................................... 45 
+Figure 5-4. PAR-Loop_REF, Entry and Exit of Loop Refresh in Idle or Standby state ........................................................... 46 
+Figure 5-5. SER- Loop_REF, Entry and Exit of Loop Refresh in Serial Read Burst state ...................................................... 46 
+Figure 5-6. SER- Loop_REF, Entry and Exit of Loop Refresh in Serial Write Burst state ...................................................... 46 
+Figure 6-1. Parallel Active_A to Parallel Active_B and Parallel Precharge_A to Parallel Precharge_B ................................. 47 
+Figure 6-2. Parallel Read_A to Parallel Read_B .................................................................................................................... 47 
+Figure 6-3. Parallel Write_A to Parallel Write_B .................................................................................................................... 48 
+Figure 6-4. Parallel Read_A and Serial Read_A to Burst stop_A and Parallel Read_B ......................................................... 48 
+Figure 6-5. Parallel Write_A and Serial Write_A to Burst Stop_A and Parallel Write_B ......................................................... 48 
+Figure 6-6. PAR-Loop_REF, Entry and Exit of Loop Refresh in Idle or Standby state ........................................................... 49 
+Figure 6-7. PAR-OS_REF, Entry and Exit of OneShot Refresh in Idle or Standby state ........................................................ 49 
+Figure 12-1. Parallel Request Packet Timing ........................................................................................................................ 61 
+Figure 12-2. Back to Back Parallel Command (with Parallel Burst Read) ............................................................................. 61 
+Figure 12-3. Back to Back Parallel Command (with Parallel Burst Write) .............................................................................. 62 
+Figure 12-4. Back to Back Parallel Command (without Parallel Burst Write/Read) ............................................................... 62 
+Figure 12-5. Burst Write to Serial Command ......................................................................................................................... 63 
+Figure 12-6. tWPST in Low Latency ...................................................................................................................................... 63 
+Figure 12-7. Full Bank Auto Burst Refresh ............................................................................................................................ 64 
+Figure 12-8. Burst Read to Serial Command ......................................................................................................................... 64 
+Figure 12-9. Seamless Burst ................................................................................................................................................. 65 
+Figure 12-10. Toggle Read Write ........................................................................................................................................... 66 
+Figure 12-11. Serial or Parallel Read Stopped by BST or BST + PRE .................................................................................. 66 
+Figure 12-12. Serial or Parallel Write Stopped by BST + PRE .............................................................................................. 67 
+Figure 12-13. ZQ Calibration Timing ..................................................................................................................................... 68 
+Figure 13-1. Package Outline Drawing Information for 96-Ball FBGA (x16) .......................................................................... 70 
+Figure 13-2. Package Outline Drawing Information for WLCSP (x16) ................................................................................... 71 
+ 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    4 
+
+ 
+
+List of Tables 
+
+Table 1-1. Product Information ................................................................................................................................................ 5 
+Table 1-2. 256Mb RPC DRAM Addressing .............................................................................................................................. 5 
+Table 1-3. Pin Description ....................................................................................................................................................... 11 
+Table 2-1. Byte numbering within a WORD transfer .............................................................................................................. 14 
+Table 2-2. Byte Masking ........................................................................................................................................................ 17 
+Table 2-3. Zout Resistance Selection Matrix ......................................................................................................................... 24 
+Table 2-4. ODT Resistance Selection Matrix ......................................................................................................................... 24 
+Table 2-5. STBODT Resistance Selection Matrix .................................................................................................................. 24 
+Table 2-6. On-Die Termination ............................................................................................................................................... 26 
+Table 3-1. Bubble NOPs for Toggle Read/Write command at different CL ............................................................................ 35 
+Table 7-1. Parallel Packet Command Truth Table .................................................................................................................. 50 
+Table 7-2. MRS Truth Table ................................................................................................................................................... 51 
+Table 7-3. Burst Count Truth Table ........................................................................................................................................ 52 
+Table 7-4. ZQCOP Truth Table .............................................................................................................................................. 52 
+Table 7-5. REFOP Truth Table ............................................................................................................................................... 52 
+Table 7-6. UTREN Truth Table ............................................................................................................................................... 52 
+Table 7-7. Serial Packet Truth Table (STB Pin)...................................................................................................................... 53 
+Table 7-8. Serial Utility Truth Table ........................................................................................................................................ 53 
+Table 8-1. Same Bank – PAR to SER.................................................................................................................................... 54 
+Table 8-2. Different Bank – PAR to SER ............................................................................................................................... 54 
+Table 8-3. Same Bank – PAR to PAR.................................................................................................................................... 54 
+Table 8-4. Different Bank – PAR to PAR ............................................................................................................................... 54 
+Table 8-5. Same Bank – SER to SER.................................................................................................................................... 55 
+Table 8-6. Different Bank – SER to SER ............................................................................................................................... 55 
+Table 8-7. Same Bank – SER to PAR.................................................................................................................................... 55 
+Table 8-8. Different Bank – SER to PAR ............................................................................................................................... 55 
+Table 9-1. Absolute Maximum Ratings .................................................................................................................................. 56 
+Table 10-1. Capacitance ........................................................................................................................................................ 56 
+Table 11-1. Recommended Operating Conditions ................................................................................................................. 57 
+Table 11-2. IDD specification parameters and test conditions ............................................................................................... 58 
+Table 11-3. Recommended AC Parameters .......................................................................................................................... 59 
+Table 13-1. 96-Ball FBGA (9 x 13 x 1.2mm) Dimension Table ............................................................................................... 69 
+Table 13-2. 50-Ball WLCSP (1.96 x 4.63 x 0.545mm) Dimension Table ................................................................................ 69 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    5 
+
+ 
+
+1 
+Introduction 
+
+1.1 Features 
+
+ X16 DDR3/DDR3L bandwidth using 22 or 24 switching signals 
+ Four internal banks, 4M x 16-bit for each bank 
+ Burst mode operation 
+ Sequential & streaming addressing modes 
+ Pipelined page activations 
+ 4 internal banks, support bank interleave 
+ Double data rate architecture with multiplexed command, address and data bus 
+ Multiplexed address/data bus with concurrent command streaming 
+ Supports series terminated signaling for low power high speed point to point operation 
+ Low power physical layer:  
+- No PLLs/DLLs 
+- JEDEC DDR3/LPDDR3 derived data and data-strobe operation 
+ Supports parallel (ODT) or series (Zout) terminated link via mode-register selectable on-chip resistors 
+ Power supplies: VDD1 = VDD = VDDQ = 1.5V (1.425V~1.575V) 
+ Operating temperature range: TC = -40~95°C (Industrial) 
+ Full bank auto burst refresh1  
+- 64ms @ -40°C ≦ TC ≦ +85°C 
+- 32ms @ +85°C < TC ≦ +95°C 
+ Packaging options:  
+- Known Good Die (“KGD”) 
+- 96-ball 9 x 13 x 1.2mm FBGA package (Pb Free and Halogen Free) 
+- 50-Ball 1.96 x 4.63 x 0.545mm WLCSP Package (Pb Free and Halogen Free) 
+
+Note 1: The refresh scheme differs from standard DRAM. Please refer to section 5 for more details. 
+ 
+ 
+ 
+Table 1-1. Product Information 
+
+Part Number 
+Clock Frequency 
+Maximum Data Rate 
+Package Type 
+Power Supply 
+
+EM6GA16LGDA-12I 
+
+800MHz 
+1600 MTPS/pin 
+
+KGD 
+
+VDD1 = 1.5V 
+VDD, VDDQ = 1.5V 
+EM6GA16LBXA-12IH 
+FBGA 
+
+EM6GA16LCAEA-12IH 
+WLCSP 
+
+GD: indicates Known Good Die  
+ 
+ 
+ 
+ 
+BX: indicates 9 x 13 x 1.2mm FBGA package  
+ 
+CAE: indicates WLCSP (Wafer Level Chip Scale Package)  
+A: indicates Generation Code 
+ 
+ 
+ 
+ 
+I: indicates Industrial Grade 
+  
+ 
+ 
+ 
+ 
+H: indicates Pb and Halogen Free 
+ 
+ 
+Table 1-2. 256Mb RPC DRAM Addressing 
+
+# of Banks 
+Bus Width 
+Bank Address 
+Row Address 
+Column Address 
+Page Size 
+
+4 
+x16 
+BA [0:1] 
+RA[0:11] 
+CA[4:9]2 
+2KB 
+
+Note 2: Total Column Address is CA[0:9].Because it’s always BL=16, don’t need to apply CA[0:3]. 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    6 
+
+ 
+
+1.2 Product Overview 
+
+The Etron High Bandwidth RPC DRAM is designed to use a minimum number of signals to deliver 
+DDR3-level in-system bandwidth for applications requiring high bandwidth such as video buffer memory.  
+
+The RPC® device merges address/command and data onto a common bus to realize a large pincount 
+saving over DDR3 additionally. Command and address control to device can be sent concurrent with 
+data by using single pin to transmit serial commands offering the high transaction efficiency of DDR3 but 
+using a total of 22 or 24 switching signals. 
+
+The RPC DRAM devices are well-suited for operation in a point to point environment using signaling 
+compatible with DDR3 1.5V. The clock frequency can be operating up to 800MHz, providing peak 
+bandwidth up to 3200 MBytes / sec. Because of the limited fan-out and constrained signaling environment, 
+the memory channels attain high frequency operation without the need for PLLs, DLLs or parallel 
+terminations, resulting in high bandwidth with low system energy usage. The elimination of many system 
+pins vs. conventional standards-compliant DDR3 DRAM saves additional system power and can result 
+in substantial die area savings on controllers designed to use these DRAMs, especially in stacked die 
+multichip packages or for IO-limited controller ASICs.  
+
+The device operates with a single power supply and is offered in Known Good Die (“KGD”), in Wafer 
+Level Chip Scale Packages (“WLCSP”) and in BGA package. The miniaturized packaging options make 
+them ideal for space constrained applications such as, monitor timing control (T-con), panel self-refresh 
+(PSR), IOT wearable devices or multichip modules.  
+
+ 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    7 
+
+ 
+
+1.3 State Diagram 
+
+ref
+
+ref
+
+PRE
+ACT
+
+ref
+
+ref
+
+REF
+REF
+
+act
+
+pre
+
+PRE
+ACT
+
+ref
+
+ref
+
+REF
+REF
+
+act
+
+pre
+
+BK0
+
+BK1
+
+PRE
+ACT
+
+REF
+REF
+
+act
+
+pre
+
+PRE
+ACT
+
+ref
+
+ref
+
+REF
+REF
+
+act
+
+pre
+
+BK2
+
+BK3
+
+PW
+
+SW
+SR
+
+tg->W
+
+utr
+
+act
+
+pre
+act
+
+act
+
+pre
+
+bst 
+
+bst+p
+
+ref 
+
+write
+
+pre
+
+act
+
+bst
+
+bst+p
+
+ref
+
+REF
+
+REF
+
+write
+
+bst 
+bst+p
+
+ref
+REF
+
+act
+
+pre
+
+read
+
+bst
+bst+p
+
+ref
+REF
+
+pre
+
+act
+
+read
+
+Tg2R
+
+read
+
+Tg2W
+
+write
+
+Column Cycle
+
+IDLE
+ACT
+
+IDLE
+ACT
+
+IDLE
+ACT
+
+IDLE
+ACT
+
+UTR
+
+init
+
+reset
+
+dpd
+DPD
+
+State
+
+PU = Power Up initialization
+ACT = Activation, PRE = Precharge
+PW = Parallel Write, PR = Parallel Read
+SW = Serial Write, SR = Serial Read
+UTR = Set Utility Register
+REF = Refresh, RST = Reset
+PD = Power Down, DPD = Deep Power Down
+IDLE = Idle, all Banks Precharged
+MRS = Mode Register Set 
+
+Command
+
+Init = Power Up Initialization
+utr = Set Utility Register
+act = Activation, pre = Bank Precharge
+write = Write, read = Read, bst = Burst Stop
+bst+p = Burst Stop + Bank(s) Precharge
+ref = Refresh, reset = Reset
+Tg2W = Read toggle to Write
+Tg2R = Write toggle to Read
+Pd = Power Down, dpd = Deep Power Down
+mrs = Mode Register Set 
+
+PU
+
+RST
+
+reset
+
+ref
+
+REF
+
+REF
+
+tg->R
+
+PR
+
+DPD
+
+dpd
+DPD
+
+ref
+
+IDLE: All 
+PRE
+
+MRS
+
+mrs
+
+PRE 
+PD
+
+pd
+
+pd
+
+ACT 
+PD
+
+ACT
+
+ 
+
+Figure 1-1. RPC State Diagram 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    8 
+
+ 
+
+1.4 Block Diagram 
+
+ 
+
+External 
+Interface
+
+Mode
+Reg
+
+Utility
+Reg
+
+Data
+Bus
+
+STB
+
+CLK
+
+Memory
+Array
+
+Address/CMD 
+Dec & Ctl 
+
+CS#
+
+DQS
+
+ODT
+
+ODT
+
+Zout
+
+ODT
+
+Zout
+
+Internal CLKs
+
+DQ Buffer
+
+Operational
+Control
+
+ZQ CAL
+
+VSSQ
+
+RZQ
+
+ZQ
+
+ 
+Figure 1-2. Block Diagram 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    9 
+
+ 
+
+1.5 FBGA Ball Assignment (Top View) 
+
+ 
+
+…
+
+A
+
+B
+
+C
+
+D
+
+E
+
+1
+2
+3
+7
+8
+9
+
+VDDQ
+DB6
+
+VSSQ
+VDD1
+
+VDDQ
+DB7
+
+VSSQ
+VDDQ
+
+VSS
+VSSQ
+
+DB4
+
+VSS
+
+DB5
+
+CS#
+
+DB10
+
+DB3
+VDDQ
+
+DQS#
+DB1
+
+DQS
+DB0
+
+DB2
+VSSQ
+
+STB
+VSSQ
+
+VSS
+
+VSSQ
+
+VDDQ
+
+VDD1
+
+VDDQ
+
+F
+VDDQ
+DB8
+DQS1
+DB13
+DB15
+VSSQ
+
+G
+VSSQ
+DB9
+DQS1#
+VDD
+VSS
+VSSQ
+
+H
+VREF
+VDDQ
+DB11
+DB12
+DB14
+VDDQ
+
+J
+NC
+VSS
+NC
+CLK
+VSS
+NC
+
+K
+VDD
+NC
+CLK#
+VDD
+NC
+
+L
+NC
+NC
+NC
+NC
+ZQ
+(opt)
+
+M
+NC
+NC
+NC
+NC
+VSS
+
+N
+VDD1
+NC
+NC
+NC
+NC
+
+P
+NC
+NC
+NC
+NC
+VSS
+
+R
+VDD1
+NC
+NC
+NC
+NC
+
+NC
+
+VSS
+
+VSS
+
+VSS
+T
+NC
+NC
+NC
+NC
+VSS
+
+NC
+
+VDD1
+
+VDD1
+
+ 
+
+Figure 1-3. 96-Ball FBGA (x16) 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    10 
+
+ 
+
+1.6 WLCSP (Wafer Level Chip Scale) Package (Top View) 
+
+1
+2
+4
+5
+
+A
+
+C
+
+D
+
+E
+
+F
+
+G
+
+H
+
+J
+
+3
+
+VSSQ
+VSSQ
+
+VSS
+DB6
+
+DB11
+DB9
+
+DB7
+DB4
+
+VSSQ
+DQS1
+
+DB8
+DQS1#
+
+VSS
+DB5
+
+ZQ
+(opt)
+DB10
+
+VDDQ
+
+VSSQ
+
+DB12
+
+DB3
+
+DQS#
+
+DQS
+
+VDDQ
+
+VDDQ
+
+VDD1
+VDDQ
+
+DB2
+VSS
+
+DB13
+CS
+
+DB0
+STB
+
+DB15
+VDD
+
+DB14
+CLK#
+
+DB1
+CLK
+
+VSSQ
+VREF
+
+B
+VDD1
+VDDQ
+VSS
+VSSQ
+VDDQ
+
+K
+VDD
+VDDQ
+VSSQ
+VSSQ
+VDDQ
+
+ 
+
+Figure 1-4. 50-Ball WLCSP (x16) 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    11 
+
+ 
+
+Table 1-3. Pin Description 
+
+Symbol 
+Function 
+Signal Characteristics and Description 
+
+CLK, 
+
+CLK# 
+
+Bus Clock 
+
+Unidirectional, Input, Differential:  
+The CLK, CLK# are differential input signals that nominally operate up to 
+800MHz. CK and CK# are differential clock inputs. All control input signals are 
+sampled on the crossing of the positive edge of CK and negative edge of CK#. 
+
+CS# 
+Chip Select 
+Unidirectional, Input: 
+CS# enables (sampled LOW) and disables (sampled HIGH) the input buffer.  
+
+DB[0:15] 
+
+Data Bus 
+
+Signals 
+
+Bidirectional, Three-state, DDR Sampled: 
+Data Bus DB [0:15] is a bidirectional bus used to transmit commands, 
+addresses and data. It is DDR-clocked: the bus is sampled on both the rising 
+and falling edge of the DQS strobes. 
+
+DQS, 
+
+DQS#, 
+
+DQS1, 
+
+DQS1# 
+
+Data Strobe 
+
+Bidirectional, Three-state, DDR Sampled: 
+Data Strobes DQS/DQS# and DQS1/DQS1# are differential bidirectional 
+strobes used for sampling the DB [0:15] signals. DQS/DQS# corresponds to 
+the data on DB[0:7], while DQS1/DQS1# corresponds to the data on DB[8:15]. 
+These strobes are source-synchronous; meaning the source of the data drives 
+the strobes. The preambles are used for both Burst Read and Burst Write 
+cycles. For Request Packets, a Write preamble is employed, as the request 
+packet is "written" to the DRAM. 
+During Auto Burst Refresh cycles, the DRAM drives DQS, DQS#, DQS1, and 
+DQS1# high to indicate it is in the BUSY state and unable to accept new 
+commands. Once the Auto Burst Refresh is complete and the DRAM returns 
+to the IDLE state, it drives the DQS signals low before placing them in a high 
+impedance state, signaling that it is ready to accept a new command. 
+
+STB 
+
+Multi - 
+
+Function Pin 
+
+Unidirectional, DDR Sampled, Input:  
+The STB pin is an input signal sampled by the Clock that provides multiple 
+functions. When the DRAM is in the IDLE state, STB is used to signify the 
+start of a cycle by marking the beginning of a Request Packet. During an 
+active cycle STB can be used to communicate address and command 
+information to the DRAM using a serial protocol. The STB signal timing is 
+center-aligned to the Clock: the Clock transitions during the middle of the STB 
+validity window. 
+
+VDD 
+Power Supply 
+
+VDD is the primary source of power for the DRAM. Nominal voltage please 
+refer to Operating Conditions. Lower voltages are supported with performance 
+degradations. 
+
+VDDQ 
+Power Supply 
+I/O power. Nominal value please refer to Operating Conditions 
+
+VDD1 
+Power Supply 
+Core Power Supply. Nominal value please refer to Operating Conditions 
+
+VSS 
+Ground 
+VSS is the ground supply connection. 
+
+VSSQ 
+Ground 
+VSSQ is the ground supply connection. 
+
+ZQ 
+(Optional) 
+Supply 
+Reference Pin for ZQ Calibration 
+
+VREF  
+Supply 
+Reference Voltage for Inputs 
+
+Note: Optional signals are metal options by requests. 
+
+ 
+ 
+ 
+ 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    12 
+
+ 
+
+2 
+Functional Description 
+
+2.1 Clocking/Timing 
+
+A free running system clock is provided via the CLK & CLK# pins on the DRAM. All system timing 
+signals are derived from this Clock or are sampled by it. 
+
+CLK
+
+DQS
+
+DB[0:15]
+
+Parallel Request Packet
+
+STB
+
+Input 
+Buffer
+Activate
+
+Start
+Cycle
+
+Serial Packet
+
+RQ RQ
+
+CS#
+
+tIS
+
+tDH
+
+tDS
+
+tCSS
+
+tIH_STB
+
+tWPRE
+
+tIS_STB
+tIS_STB tIH_STB
+
+tDQSS
+
+tWPST
+
+ 
+
+Figure 2-1. Request Packet Timing Relationships 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    13 
+
+ 
+
+2.2 Commencing cycles from Idle State via Request Packet 
+
+When the DRAM is in the Idle state, the DB[0:15] receivers are de-energized to save power. The STB 
+signal is used to signify the start of an Active Cycle. The STB signal is driven low two clock cycles before 
+the system transmits a Request Packet on the DB pins. This energizes the DRAM’s DB[0:15] I/O circuits 
+and marks the beginning of a Request Packet.  
+
+STB is an input-only multifunction signal that is DDR-sampled by the Clock and is driven by the controller. 
+The phase relationship between STB and the Clock is shifted by 90 degrees (see Figure 2-1): the Clock 
+transitions in the middle of the STB validity window. Figure 2-1 shows a timing diagram illustrating the 
+phase relationship between the STB signal and the Request Packet at the start of a cycle and for 
+pipelined cycles.  
+
+ 
+
+2.3 Data Strobes: DQS, DQS# 
+
+The DQS signals are used to sample the DB[0:15] signals. The DQS signals are differential, 
+bidirectional and are source synchronous: the source of the DB[0:15] signals also drives the DQS 
+signals. Functionally they use the same preamble as DDR3: During Read Cycles the DRAM drives the 
+DQS signal low from the High-Z state followed by it toggling the DQS signal at the same frequency as 
+the Clock and edge-aligned with the data on subsequent Clock transitions. At the end of the read cycle 
+the DQS signal is placed into the High-Z state. A timing diagram showing the DQS behavior during a 
+read cycle is shown in Figure 12-2.   
+
+Like for DDR3, during Write Cycles DQS is driven high by the controller from the High-Z state followed 
+by it toggling at the same frequency as the Clock on subsequent bus samples. Instead of toggling in 
+phase with the DB[0:15] signals, the DQS signal transitions in the middle of the data eye, or offset 90 
+degrees from the DB[0:15] transition windows (also called “center aligned or quadrature relationship”) 
+during write cycles. A timing diagram showing the behavior of the DQS signals during a Write Cycle is 
+shown in Figure 12-5.    
+
+The DQS signals are also used for receiving Request Packets on the DB[0:15] signals. The timing 
+relationship to the DB signals is the same as for a Write Cycle. 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    14 
+
+ 
+
+2.4 Bandwidth and Minimum Core Transfer Quantities: 
+
+The high bandwidth DRAM features an external bus Clock operating up to 800MHz. Using DDR 
+signaling and a 16 bit wide interface, a peak external bus bandwidth up to 3.2GB/sec is attained. This 
+high bandwidth must be delivered by a DRAM core running no faster than 100MHz. As a result the 
+DRAM core has a 32 byte access size (256 bits) operating at a 100MHz rate (with a 800MHz Clock).  
+
+This 32 byte quantity is called a WORD, which is the minimum transaction quantum of data. Addressing 
+is at the WORD level, with a WORD being 256bits.  
+
+A minimum length read cycle will therefore consist of a 32 byte data WORD. Using a x16 bus and DDR 
+signaling it takes 8 bus clock cycles (10ns at 800MHz) to transfer the 32 byte WORD.  
+
+A Burst Read or Write cycle will consist of a request packet followed by one or more WORDs of data.  
+
+Table 2-1 shows the Byte numbering within a WORD transfer. 
+
+Table 2-1. Byte numbering within a WORD transfer 
+
+Clock Phase 
+DB[15:8] 
+DB[7:0] 
+Cycle 
+
+H 
+Byte1 
+Byte0 
+
+Clock0 
+
+L 
+Byte3 
+Byte2 
+
+H 
+Byte5 
+Byte4 
+
+Clock1 
+
+L 
+Byte7 
+Byte6 
+
+H 
+Byte9 
+Byte8 
+
+Clock2 
+
+L 
+Byte11 
+Byte10 
+
+H 
+Byte13 
+Byte12 
+
+Clock3 
+
+L 
+Byte15 
+Byte14 
+
+H 
+Byte17 
+Byte16 
+
+Clock4 
+
+L 
+Byte19 
+Byte18 
+
+H 
+Byte21 
+Byte20 
+
+Clock5 
+
+L 
+Byte23 
+Byte22 
+
+H 
+Byte25 
+Byte24 
+
+Clock6 
+
+L 
+Byte27 
+Byte26 
+
+H 
+Byte29 
+Byte28 
+
+Clock7 
+
+L 
+Byte31 
+Byte30 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    15 
+
+ 
+
+2.5 Burst Read Cycle 
+
+A Burst Read cycle will read a sequential series of WORDS up to the Burst Count supplied in the 
+Request Packet, provided serial packets are not used to concurrently stream addresses to the device. A 
+minimum Burst Read would be a single WORD, or 32 Bytes.  
+
+There is an address counter on board the DRAM that is initially loaded with the address of the first Word 
+of the burst. The address counter is auto-incremented as each WORD is transferred, until the Burst 
+Count is reached. At that time the cycle is retired and the DRAM is returned to the ACT state.  
+
+Upon reaching a Page Boundary, the address counter is “wrapped” and the auto-incrementing continues 
+from the lower address. 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    16 
+
+ 
+
+2.6 Burst Write Cycle 
+
+A Burst Write Cycle will write a sequential series of WORDS up to the Burst Count supplied in the 
+Request Packet, provided serial packets are not used to concurrently stream addresses to the device. A 
+minimum Burst Write would be a single WORD, or 32Bytes.  
+
+The data field to be written is supplied at time based in part on the CAS Latency. Once the data has 
+begun transmitting, it is supplied in a continuous stream until the entire burst is satisfied.  
+
+There is an address counter on board the DRAM that is initially loaded with the starting address of the 
+burst. The address counter is auto-incremented as each WORD is transferred, until the Burst Count is 
+reached. At that time the cycle is retired and the DRAM is returned to the ACT state.  
+
+Upon reaching a Page Boundary, the address counter is “wrapped” and the auto-incrementing continues 
+from the lower address.  
+
+Similar to Read Request Packet, Write Request Packet includes the Op Code, Bank Address, Column 
+Address and Burst Count as Read Request Packet do.  
+
+Before the write data, two cycles of Byte Write Mask are transferred. Individual bytes can be written 
+using Write Masks transmitted in advance of the data packet. In Two clock cycles two 32-bit Write Masks 
+are transmitted at WL-2 and WL-1 cycles. The first Byte Write Mask cycle is applied to the beginning 
+word of a burst. The next clock cycle transfers a Byte Write Mask for the last word of a multi-word Burst 
+Write. The timing are shown in Figure 2-2, Figure 2-14, Figure 3-3 and Figure 12-5. 
+
+In a multi-word Burst Write the first Mask applies only to the first word in the Burst Write. The second 
+Mask applies only to the last word in a multi-word Burst Write. All other words in the burst are not 
+masked. 
+
+Bytes to be written have a “0” in the corresponding bit position in the Mask field. The byte numbering is 
+Little Endian: lower numbered bit positions correspond to lower numbered byte positions.  
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    17 
+
+ 
+
+2.7 Byte Write Masking (DM) 
+
+Byte Masking provides a means to permit as few as one byte to be written in a 32byte word. A Write 
+Request Packet includes two additional 32 bit fields placed before first write data which contain the First 
+and Second Byte Mask Field respectively. When cleared, data is written, When set to “1” data is masked, 
+ie, NOT written in the corresponding byte position in the 32 byte word. The first byte returned on the 
+lower bits of the Data Bus is defined as Byte 0 of the 32Byte Word.  
+
+In a multi-word Burst Write the First Mask applies only to the first word in the Burst Write. The Second 
+Mask applies only to the last word in a multi-word Burst Write. All other words in the burst are not 
+masked. This offers an efficient way to handle data structures not aligned to 32 byte boundaries. See 
+Table 2-2. 
+
+Table 2-2. Byte Masking 
+
+Bit # 
+Sample 0  
+Sample 1  
+Sample 2  
+Sample 3  
+
+1st Word of write burst Mask 
+Last Word of write burst Mask 
+
+0 
+M0 
+M16 
+M0 
+M16 
+
+1 
+M1 
+M17 
+M1 
+M17 
+
+2 
+M2 
+M18 
+M2 
+M18 
+
+3 
+M3 
+M19 
+M3 
+M19 
+
+4 
+M4 
+M20 
+M4 
+M20 
+
+5 
+M5 
+M21 
+M5 
+M21 
+
+6 
+M6 
+M22 
+M6 
+M22 
+
+7 
+M7 
+M23 
+M7 
+M23 
+
+8 
+M8 
+M24 
+M8 
+M24 
+
+9 
+M9 
+M25 
+M9 
+M25 
+
+10 
+M10 
+M26 
+M10 
+M26 
+
+11 
+M11 
+M27 
+M11 
+M27 
+
+12 
+M12 
+M28 
+M12 
+M28 
+
+13 
+M13 
+M29 
+M13 
+M29 
+
+14 
+M14 
+M30 
+M14 
+M30 
+
+15 
+M15 
+M31 
+M15 
+M31 
+
+ 
+
+NOP
+
+AL=1
+
+tIS
+
+WR
+
+DM DM DM DM
+
+>=tCSS (10ns)
+
+WL-2 WL-1
+
+CL=11
+
+WL=12
+
+CLK
+
+STB
+
+CS#
+
+DQS
+
+DB[15:0]
+tRPST
+
+tDQSS
+
+NOP
+
+ 
+
+Figure 2-2. Write Mask cycles after Serial Toggle R/W command (WL=12, AL=1, CL=11) 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    18 
+
+ 
+ 
+The Legal command sequences are defined. 
+
+Single PAR_WR: The first DM masks first write word and the second DM masks last write word when 
+Burst Count (BC) is satisfied. 
+
+PAR_WR  SER_WR  …  SER_WR  SER_CMD (BST, TG, REF): The first DM masks first write 
+word of PAR_WR and the second DM masks last write word of SER_WR when BST/TG/REF is issued. 
+
+PAR_WR  SER_REF: The first DM masks first write word and the second DM masks last write word 
+when REF is issued. 
+
+SER_TG  SER_WR  …  SER_WR  SER_BST: The first DM masks first write word after toggled 
+and the second DM masks last write word when BST is issued. 
+
+SER_TG  SER_WR  …  SER_WR  SER_BST+PRE: The first DM masks first write word after 
+toggled and the second DM masks last write word when BST+PRE is issued. 
+
+SER_TG  SER_WR  …  SER_WR  SER_TG: The first DM masks first write word after toggled 
+and the second DM masks last write word when SER_TG is issued. 
+
+ 
+Notes: 
+1. PAR_WR : Parallel Packet Write command 
+2. SER_WR : Serial Packet Write command 
+3. SER_TG : Serial Packet Toggle R/W command 
+4. SER_BST : Serial Packet Burst Stop command 
+5. SER_BST+PRE : Serial Packet Burst Stop with Bank Precharge command 
+6. SER_REF : Serial Packet Bank Refresh command 
+ 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    19 
+
+ 
+
+2.8 Activate State 
+
+The device may be placed into the Activate state in 3 ways. In Activate state the internal clocking system 
+will enter 8-cycle clocking. The latencies between any parallel commands must be multiples of 8 tCK.  
+
+1) Completing a Burst Read or a Burst Write access and no Bank Pre Charge activity is under way 
+
+2) Completion of an Activation Command  
+
+3) After executing the Burst Stop command from a Serial Packet except for R/W Toggle 
+
+ 
+
+ 
+
+2.9 Idle State  
+
+The device may be placed into the Idle state in 4 ways. In Idle state the 8-cycle clock timing will be 
+released so the next command doesn’t need to follow 8-cycle clocking. 
+
+1) Completing a Pre Charge All Bank access  
+
+2) Completion of a Bank Pre Charge command when no other Bank is activated 
+
+3) Completing a Refresh access 
+
+4) Exiting the Reset state 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    20 
+
+ 
+
+2.10 Reset State 
+
+The device may enter Reset State in either Parallel Mode or Serial Mode. During Reset State all internal 
+registers will be reset. After 5us DRAM will exit Reset State to Idle State. MRS should be applied to set 
+the DRAM internal registers.  
+
+CLK
+
+VDD
+
+STB
+
+CS#
+
+DQS
+
+Parallel Reset
+
+tRESET 5us
+
+tRP
+tMOD
+
+PreCharge All
+MRS
+Valid Command
+Exit Reset
+
+DB[15:0]
+
+>=tCSH(5ns)
+
+tIH
+
+ 
+
+Figure 2-3. Parallel Reset Entry & Exit 
+
+ 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    21 
+
+ 
+ 
+
+NOP
+
+CLK
+
+VDD
+
+STB
+
+CS#
+
+DQS
+
+Burst Write 
+transfer
+
+tRESET 5us
+
+tRP
+tMOD
+
+PreCharge All
+MRS
+Valid Command
+Excute 
+Serial Reset
+
+DB[15:0]
+
+8 Cycles
+
+Serial Reset
+
+Exit Reset
+
+tIS_STB
+
+ 
+
+Figure 2-4. Serial Reset Entry & Exit 
+ 
+
+ 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    22 
+
+ 
+
+2.11 Power Down (PD) State 
+
+The device may enter Power Down State. During PD State CS# should keep at Low status. DRAM can 
+exit PD State by asserting CS# to High. The minimum PD period is defined as tCKE and the latency to 
+exit PD is tPXCSL. 
+
+CLK
+
+STB
+
+CS#
+
+DQS
+
+PD Entry
+
+DB[15:0]
+
+tIH
+
+>=tPXCSL
+
+tIS
+
+CS# should be Keep L until tCKE
+
+>=tCKSPE
+>=tCKSPX
+
+>=tCKE
+ 
+Figure 2-5. Power-Down Entry & Exit 
+
+ 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    23 
+
+ 
+
+2.12 Deep Power Down (DPD) State 
+
+The device may enter Deep Power Down State. During DPD State CS# should keep at Low status. 
+DRAM can exit DPD State by asserting CS# to High. The minimum DPD period is defined as tDPD and 
+the latency to exit DPD is tINIT. After DPD Exit DRAM needs to re-initialize by applying Reset, Pre 
+Charge All command, MRS command and ZQ Calibration command. 
+
+CLK
+
+STB
+
+CS#
+
+DQS
+
+DPD Entry
+
+DB[15:0]
+
+tIH
+tIS
+
+CS# should be Keep L until tDPD
+
+>=tCKSPE
+>=tCKSPX
+
+>=tDPD
+>=tINIT
+Parallel Reset
+
+8 Cycles
+8 Cycles
+
+tRESET 5us
+
+Serial Reset
+Serial Reset
+
+Exit Reset
+
+tCSS
+
+tCSH
+tIH
+
+CLK
+
+STB
+
+CS#
+
+DQS
+
+DB[15:0]
+
+tRP
+tMOD
+
+PreCharge All
+MRS
+ZQ Calibration
+A
+Exit Reset
+
+CS# should be Keep H until tINIT
+
+A
+
+ 
+
+Figure 2-6. Deep Power-Down Entry & Exit 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    24 
+
+ 
+
+2.13 On Chip Termination 
+
+The RPC DRAM supports parallel or series termination on chip termination resistors which are selectable 
+via mode-register (MRS). The resistance are the combination of the resistors as shown in Table 2-3. and 
+Table 2-4. The series termination (Zout) is defined by DB[12:9] at CLK rising edge and apply to all DQ and 
+DQS pins when reading out data. When DB[9] is set to "1" the Zout resistance is 23.7 ohm. Note that the 
+default setting for Zout is open. If Zout is not properly set to a valid value when setting MRS then the data 
+will not be then there will be no data on the DQ pins. 
+ 
+The parallel termination for DQ and DQS pins (ODT) is defined by DB[15:13] at CLK rising edge. ODT 
+function is enabled by CS# pin going low state and controlled by mode register settings. ODT function is 
+not supported in Refresh, in Deep Power Down, in Power Down (mode register option) and during read 
+operation. 
+ 
+Termination for STB pin (STBODT) is defined by DB[12] at CLK falling edge, as shown in Table 2-5. 
+STBODT is always enabled when it's set to "1".  
+ 
+
+ 
+
+Table 2-3. Zout Resistance Selection Matrix 
+
+MRS 
+CLK 
+23.7Ω 
+Open  
+(default) 
+
+27.7Ω 
+36Ω 
+40Ω 
+60Ω 
+51.4Ω 
+90Ω 
+120Ω 
+
+DB9 
+ 
+1 
+0 
+0 
+0 
+0 
+0 
+0 
+0 
+0 
+
+DB10 
+ 
+X 
+0 
+1 
+0 
+1 
+0 
+1 
+0 
+1 
+
+DB11 
+ 
+X 
+0 
+1 
+1 
+0 
+0 
+1 
+1 
+0 
+
+DB12 
+ 
+X 
+0 
+1 
+1 
+1 
+1 
+0 
+0 
+0 
+
+ 
+
+Table 2-4. ODT Resistance Selection Matrix 
+
+MRS 
+CLK 
+Open  
+(default) 
+
+13.85Ω 
+18Ω 
+20Ω 
+30Ω 
+25.7Ω 
+45Ω 
+60Ω 
+
+DB13 
+ 
+0 
+1 
+0 
+1 
+0 
+1 
+0 
+1 
+
+DB14 
+ 
+0 
+1 
+1 
+0 
+0 
+1 
+1 
+0 
+
+DB15 
+ 
+0 
+1 
+1 
+1 
+1 
+0 
+0 
+0 
+
+ 
+
+Table 2-5. STBODT Resistance Selection Matrix 
+
+MRS 
+CLK 
+STBODT 
+
+DB12 
+ 
+
+0 
+Disable ODT of STB (default) 
+
+1 
+Always enable ODT of STB 
+
+ 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    25 
+
+ 
+
+c
+
+DB
+Pin
+
+DB
+Pin
+
+Zout
+
+120
+
+90
+
+60
+
+120
+
+90
+
+60
+
+90 ohms 
+
+ASIC
+DRAM OCT
+
+120
+
+90
+
+60
+
+ODT
+
+23.7
+
+ 
+
+Figure 2-7. Point to Point Signaling Environment using Parallel or series termination on DRAM  
+
+ 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    26 
+
+ 
+
+tODTRoff: Asynchronous Rtt turn-off latency after the rising edge of read command. 
+
+tODTRon: Asynchronous Rtt turn-on latency after the rising edge of read burst end. 
+
+tODToff: Asynchronous Rtt turn-off delay from CS# input. 
+
+tODTon: Asynchronous Rtt turn-on delay from CS# input. 
+
+tODTd: Rtt disable delay from power down entry. 
+ 
+Table 2-6. On-Die Termination 
+
+Symbol 
+Min. 
+Max. 
+Unit 
+
+tODTRoff 
+(RL-2) + tLZ(DQS)(min) 
+(RL-2) + tDQSCK(max) 
+ns 
+
+tODTRon 
+tDQSCK(min) + 3 
+tDQSCK(max) + 3 
+ns 
+
+tODToff 
+1.75 
+3.5 
+ns 
+
+tODTon 
+1.75 
+3.5 
+ns 
+
+tODTd 
+ 
+12 
+ns 
+
+ 
+
+ 
+
+tODTROff(min) 
+
+tDQSCK
+
+RD
+
+ODT OFF
+tODTon(min)
+
+tODTon(max)
+
+>=tCSS(10ns)
+
+CLK
+
+CS#
+
+DB
+
+STB
+
+DQS#
+DQS
+
+ODT
+
+tIS
+
+E0 00 E1 01 E2 02 E3 03 E4 04 E5 05 E6 06 E7 07
+
+tDQSCK
+
+ODT ON
+
+CMD
+
+Read End
+
+RL-2
+
+ODT OFF
+
+tODTRon(min)
+tODTRon (max)
+
+ODT ON
+
+tODTROff(max) 
+
+ 
+
+Figure 2-8. ODT Function, Parallel Read (CL = 10, BC = 0) 
+
+ 
+
+CLK
+
+CS#
+
+DB
+
+STB
+
+DQS#
+DQS
+
+tODTd
+
+Internal
+PD
+
+tIS
+
+PD
+
+ODT
+ODT OFF
+ODT ON
+ODT OFF
+
+tODTon(min)
+
+tODTon(max)
+
+>=tCSS(10ns)
+
+tIS
+
+ 
+
+Figure 2-9. ODT Function, Power Down Mode, ODTPD = 0 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    27 
+
+ 
+
+CLK
+
+CS#
+
+DB
+
+STB
+
+DQS#
+DQS
+tODToff(min)
+
+Internal
+PD
+
+tIS
+
+ODT
+ODT OFF
+
+tODTon(min)
+
+tODTon(max)
+
+>=tCSS(10ns)
+
+tIS
+
+ODT ON
+ODT OFF
+
+tODToff(max)
+
+PD
+
+ 
+
+Figure 2-10. ODT Function, Power Down Mode, ODTPD = 1 
+
+ 
+ 
+
+CLK
+
+CS#
+
+DB
+
+STB
+
+DQS#
+DQS
+
+>=tCSH(5ns)
+
+Internal
+REF
+
+REF
+
+ODT
+ODT OFF
+
+tODTon(min)
+tODTon(max)
+
+>=tCSS(10ns)
+
+tIS
+
+tIH
+
+tODToff(min)
+tODToff(max)
+
+ODT OFF
+ODT ON
+ 
+
+Figure 2-11. ODT Function, Refresh Mode 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    28 
+
+ 
+
+2.14 UTR (Utility Register Read) 
+
+Utility Register Read (UTR) function is used to Read out a predefined system timing calibration bit 
+sequence. The basic concept of the UTR is shown below. 
+
+ 
+
+Memory Core
+(all banks precharged)
+
+UTREN
+
+DB, DQS, DQS#
+
+Utility register
+Pre-defined data for Reads
+
+ 
+
+Figure 2-12. UTREN Block Diagram 
+
+ 
+ 
+To enable the UTR, a Utility Register (UTR) command must be issued with UTREN = 1, as shown in Table 
+7-1. Prior to issuing the UTR command, all banks must be in the idle state (all banks precharged and tRP 
+met). Once the UTR is enabled, any subsequent RD commands with defined Burst Count (BC) will be 
+redirected to the Utility Register. The resulting operation, when a RD command is issued, is defined by 
+UTR bits [5:4] (UTROP0&UTROP1) when the UTR is enabled as shown in Table 7-6. When the UTR is 
+enabled, only RD commands are allowed until a subsequent UTR command is issued with the UTR 
+disabled (UTREN = 0). Note that Power-Down mode, Self-Refresh, and any other non-RD command is 
+not allowed during UTR enable mode. Serial command is not allowed in the UTR Read Mode, either. The 
+RESET function is supported during UTR enable mode. 
+
+ 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    29 
+
+ 
+ 
+
+CLK
+
+STB
+
+CS#
+
+DQS
+
+DB[15:0]
+
+UTREN = 1
+RD
+
+RL
+
+All bank should be Idle (All bank precharged).
+Only PAR-RD. PAR-UTR. And PAR-RST is supported during UTR enable mode.
+SER-CMD is not allowed.
+DB setting at PAR-RD:
+BC: Set burst count
+ 
+RL= AL + CL, AL = 1
+
+ tMOD 
+
+Predefined 
+Pattern
+
+BC
+
+A
+
+UTREN = 0
+
+ tMOD 
+
+VALID
+A
+
+CLK
+
+STB
+
+CS#
+
+DQS
+
+DB[15:0]
+
+ 
+
+Figure 2-13. UTR Timing 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    30 
+
+ 
+
+2.15 Cycle Templates: 
+
+Cycle templates for operations commencing from the Idle State are shown in Figure 2-14 Pages are 
+opened using an Activate Command. Activate commands may only be issued to precharged Banks. 
+Burst Read or Burst Write cycles are assumed to access an open page. DRAM core timing parameters 
+are listed in Table 11-3. 
+
+Row Cycle 
+Timings
+
+Burst Read
+
+Pre Charge
+Bank A
+
+Burst Write
+
+Activate
+Bank A
+
+Activate
+Bank A
+
+Activate
+Bank A
+
+Read
+Bank A
+
+Write
+Bank A
+
+tRP
+tRRD
+
+tRCD
+RL = AL + CL
+
+tRCD
+WL = AL + CL
+
+Minimum Read Data Packet 
+(16 bus samples)=1 "Word”
+
+Minimum Write Data Packet 
+(16 bus samples)=1 "Word”
+
+D0
+
+D1
+
+D3
+
+D2
+
+D4
+
+D5
+
+D6
+
+D7
+
+D8
+
+D10
+
+D9
+
+D11
+
+D12
+
+D13
+
+D14
+
+D15
+
+Q0
+
+Q1
+
+Q3
+
+Q2
+
+Q4
+
+Q5
+
+Q6
+
+Q7
+
+Q8
+
+Q10
+
+Q9
+
+Q11
+
+Q12
+
+Q13
+
+Q14
+
+Q15
+
+M0L
+M0H
+M1L
+M1H
+
+Write
+Mask
+
+{
+
+WL-2
+
+{
+
+WL-1
+
+Activate
+Bank A
+
+tRAS
+
+Activate
+Bank B
+
+tRC
+
+Parallel or 
+Serial
+R or W
+Bank A
+
+tRCD
+
+tPPD
+tPPD
+tPPD
+tPPD
+
+ 
+
+Figure 2-14. Cycle Templates 
+
+ 
+
+ 
+
+ 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    31 
+
+ 
+
+3 
+Command Description and Operation 
+
+3.1 Addressing for Parallel Mode Operation: 
+
+The address used in Burst Read and Burst Write cycles is stored in an address counter. At the beginning 
+of a memory cycle, the address counter is loaded with a starting address specified in the Request 
+Packet. As each word of the cycle is transferred the counter is auto-incremented. If this auto-incremented 
+address crosses a page boundary then the address “wraps” around the page boundary and continues 
+auto-incrementing until the full burst length is transferred: all within the same page. Once the full data 
+burst has transferred the DRAM is returned to the ACT state. 
+
+ 
+
+3.2 STB Pin: Serial Mode Addressing and Control: 
+
+Once the DRAM is performing an Parallel Read or Write Transfer Cycle, the STB signal can be used to 
+transfer selected commands and addressing information to the DRAM in a serial 16 bit format called a 
+Serial Packet. Several commands are supported by the Serial Packet. The supported commands are 
+Burst Read and Burst Write, Pipelined Activate, Reset, and Utility. Under the Utility command, various 
+options are supported. These options are RW Toggle, Burst Stop with/without selective Bank Precharge, 
+Selective Bank Auto Burst Refresh and Pipelined Bank Precharge. If Auto Burst Refresh is set, all banks 
+will be Auto Precharged and the Bank0 - Bank3 specified Banks are to be Auto Burst Refreshed. If 
+Pipelined Precharge is set, then any Bank0-Bank3 bits set to 1 instruct those Banks to be Precharged.  
+
+Pipelined Bank Precharge will precharge the banks indicated by the Bank 0-3 bits without terminating 
+the burst. RW Toggle causes all Bank bits and Auto Burst Refresh bits to be ignored and only the Burst 
+mode is changed: Reads switch to Writes or vice versa. 
+
+Serial Packets are effective when data transfer is ongoing. If no Serial Read or Write commands are 
+issued before meeting burst count of Parallel Read or Write, Serial Mode will be stopped. On the other 
+hand, if a Serial Read or Write is issued then the Serial Mode will not be stopped until receiving Burst 
+Stop or Refresh commands. 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    32 
+
+ 
+
+3.3 Cycle Start and Command/Address Streaming via STB Pin: 
+
+During the Idle State if the STB signal is driven low before a Clock rising edge, the device exits the idle 
+state and must be supplied with a Parallel Request Packet. The Request Packet is read from DB[0:15] 
+signals on the clock rising and falling edge two cycles after STB goes Low. An 1-cycle or longer DQS 
+preamble should be issued before the Request Packet. On the same rising edge of the clock is the 
+beginning of a Serial Packet. During the next 8 sequential clock cycles a full Serial Packet is received on 
+the STB pin. Each subsequent 8 clock cycle period another Serial Packet is received, continuing in this 
+manner until the burst cycle is retired. The Serial Packet is therefore synchronized to be sampled on 
+Clock cycle 0, 8, 16, 24 …etc of the current Burst cycle.  
+
+The Parallel Request Packet can be issued one at a time, contiguous Parallel Request Packets is illegal. 
+SOC should wait for meeting tPPD and/or other timing constraints before issuing the next Parallel 
+Request Packet. If the Parallel Request Packet is read or write command, which means it will enter 
+Serial Packet Mode, the next Parallel Request Packet should wait for end of serial operations and 
+entering Idle State. 
+
+The DQS pairs must be driven Low-Z to perform the preamble. The DQS should keep at Low-Z state 
+until fulfills tWPST at the end of the Request Packet. 
+
+The Serial Packets are used to provide commands and address information to the DRAM via the STB 
+pin using a Serial format. This is called Address Streaming Mode. See Figure 3-1. 
+
+ 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    33 
+
+ 
+
+CLK
+
+STB
+
+DQS
+
+DB[15:0]
+
+P-CMD
+Read Bank A
+
+Read Latency RL
+Read Data from Bank A
+
+Execute P-CMD
+
+CS#
+
+S-CMD 1
+S-CMD 2
+S-CMD 3
+
+Execute S-CMD 1
+
+B0
+
+B1
+
+B3
+
+B2
+
+B4
+
+B5
+
+B6
+
+B7
+
+B8
+
+B10
+
+B9
+
+B11
+
+B12
+
+B13
+
+B14
+
+B15
+
+Serial Packet
+
+ 
+
+Figure 3-1. Burst Read to Serial Command 
+
+ 
+
+During Address Streaming Mode the Serial Packet can be used to provide addressing information for 
+random addresses for Burst Read and Burst Write cycles. It can also be used to send Activate or 
+Precharge commands to any Bank not currently being accessed. These Activate commands execute 
+concurrent with any Burst Read or Burst Write activity underway. Only one Activate command can be 
+outstanding at any given time.  
+
+Note that any bank and any column can be specified in the Address Streaming mode. It is possible to 
+switch banks or to continue reading/writing from the same bank. Once a random address is captured 
+from the STB pin, it is used to load the auto-incrementing address counter as the source for subsequent 
+addresses if no further serial addresses are supplied. Once Serial Addressing is used, the burst count 
+counter no longer controls the length of the burst. The cycle can only be retired via the Burst Stop or 
+Refresh command in that case.  
+
+Besides data streaming, more functions can be issued by Serial Utility, as shown in Table 7-8. The data 
+streaming can be and only be stopped by BST (Burst Stop) with or without PRE or REF. Banks can be 
+precharged individually or together. Read operation can be toggled to Write and vice versa. And Serial 
+Reset is available via Serial Utility. 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    34 
+
+ 
+
+3.4 Serial Packet Sampling Format 
+
+8 Clock groups
+8 Clock groups
+8 Clock groups
+8 Clock groups
+
+DB [0:15]
+
+Clock 
+
+STB
+
+STB Pin Legend: 
+          : Cycle Start from Idle state
+          : Opcode in Serial Packet
+          : Rest of Serial packet
+DB [0:15] Legend:
+          : Paralle Write or Read Request Packet
+          : Data transferred to/from DRAM 
+ 
+
+Figure 3-2. Serial Packet Sampling 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    35 
+
+ 
+
+3.5 Toggling Read/Write Mode: 
+
+The Utility Toggle RW command allows a Burst Read to be converted into a Burst Write without returning 
+to the idle state. When the command is issued during a Burst Read Cycle several Bubble NOP and a 
+Serial Burst Write Command must immediately follow. The number of Bubble NOP is shown in Table 3-1. 
+Under the Serial Burst Write Command First and Last Byte Write Masks are transmitted over the DB 
+[0:15] signals commencing in a specified timeslot during the r/w bubble and just before the write data. 
+The DQS signals are driven by the controller during the Mask transfer in a quadrature relationship like 
+used for Write Cycles or Request Packets. See Figure 3-3.  
+
+If the device is performing a Burst Write and the Utility Toggle RW command is issued, the Burst Write is 
+interrupted and converted to a Burst Read Cycle. Immediately following the Utility Toggle RW command 
+must be some NOP commands and a Burst Read Command. The NOP commands form the bubble 
+cycles to prevent data contention. The number of Bubble NOP is shown in Table 3-1. The Burst Read 
+Cycle may address any Column address in any Active Bank. 
+
+The Burst is resumed after a Serial Packet is issued following the Utility Toggle command. The Serial 
+Packet specifies the bank and column addresses from which the burst is to resume in the new operating 
+mode. Note that any column address in any open page can be selected for the resumption of the burst 
+process. 
+
+Table 3-1. Bubble NOPs for Toggle Read/Write command at different CL  
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+
+CL 
+Read toggle to Write (tRTW) 
+Write toggle to Read (tWTR) 
+
+3 ~ 4 
+0 
+0 
+
+5 ~ 12 
+1 
+1 
+
+13 ~ 16 
+2 
+2 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    36 
+
+ 
+ 
+
+Tog
+NOP
+W0
+NOP
+
+CLK
+
+CS#
+
+STB
+
+DQS
+
+DB[15:0]
+
+NOP
+Tog
+NOP
+R1
+NOP
+NOP
+NOP
+
+Mask
+by M1
+Z
+Z
+
+Hidden Actions
+Serial Read Burst Transfer
+
+Write Mask
+
+Read Burst
+
+8-cycles Serial CMDs
+
+NOP
+
+8 Clks
+
+Write Burst Transfer
+
+8 Clks
+Z
+Z
+Z
+
+NOP
+
+Z
+BL16
+Mask
+by M0
+
+W2R Bubbles
+
+Z
+
+R2W Bubbles
+
+M0L
+
+M0H
+
+M1L
+
+M1H
+
+Last Word of 
+Write Burst
+
+First Word of 
+Write Burst
+
+Note : The number of R2W & W2R Bubbles 
+           are specified in Table 3-1
+
+ 
+ 
+
+Figure 3-3. Toggle Read/Write 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    37 
+
+ 
+
+3.6 Retiring Address Streaming Cycles: 
+
+Once Address Streaming is enabled, the device continues bursting using the addressing computation 
+rules described above until a Burst Stop command is issued via the STB signal. Any refresh cycles in 
+process will be finished and then the device returns to the Idle State. If no refresh cycles are in operation, 
+the next timeslot the DRAM will be placed into the Idle state.  
+
+3.7 Pipelined Activation: 
+
+The serial protocol used for Address Streaming via the STB signal also supports Pipelined Activation. 
+Pipelined Activation permits row addresses in a specified Bank to be activated while concurrently 
+reading or writing open pages in other banks. Note that the tRCD parameter must be met before using 
+any activated page, irrespective of it being activated via a Pipelined Activate or via a Request Packet. 
+Only one bank can be activated at a time using pipelined activation. Multiple banks can be activated one 
+after another via the Serial Packet. In this way all four banks can each have an open page. Using 
+Address Streaming combined with concurrent page precharge and activation any address in the DRAM 
+can be accessed in Address Streaming mode and the burst can run for any duration. 
+
+An assortment of Address Streaming and Pipelined Activation cycles are schematically illustrated in 
+Figure 3-4 below. In this case Bank 0 is Burst Reading while Bank 1 received a Burst Read command. 
+The bus changed to transfer Bank 1 data. During Bank 1’s burst read Bank 0 received a pipelined 
+Precharge command followed by a pipelined Activation command. Bank 1 kept sequential burst until 
+receiving a Bank 0 Burst Read command. Bank 1 retired data bus to Bank 0 and did pipelined 
+Precharge and Activation as well for next contiguous burst transfer.  
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    38 
+
+ 
+
+Read
+
+Write
+
+NOP
+B1
+NOP
+P0
+NOP
+
+BL16
+
+CLK
+
+STB
+
+DQS
+
+DB[15:0]
+
+A0
+NOP
+B0
+NOP
+P1
+NOP
+A1
+NOP
+
+Hidden Actions
+
+Bank 0 Burst Transfer
+Bank 1 Burst Transfer
+Bank 0 Burst 
+
+8-cycles Serial CMDs
+
+PreC 0
+Act 0
+
+8 Clks
+
+PreC 1
+
+CS#
+Keep Low
+
+NOP
+B1
+NOP
+P0
+NOP
+
+BL16
+
+CLK
+
+STB
+
+DQS
+
+DB[15:0]
+
+A0
+NOP
+B0
+NOP
+P1
+NOP
+A1
+NOP
+
+Hidden Actions
+
+Bank 0 Burst Transfer
+Bank 1 Burst Transfer
+Bank 0 Burst 
+
+8-cycles Serial CMDs
+
+PreC 0
+Act 0
+
+8 Clks
+
+PreC 1
+
+CS#
+
+Keep High
+
+ 
+
+Figure 3-4. Seamless Burst Transfer (2 Bank Interleave) 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    39 
+
+ 
+
+3.8 Address / Command Decoding and CAS Latency 
+
+There is a finite latency required to assemble and decode addresses and commands received via 
+Request Packets or Serial Packets. There is also a finite latency, also called as CAS Latency (CL), 
+required for data transfer into or out of the memory core. From an absolute time perspective these 
+latencies remain constant versus frequency. But from a Clock cycle perspective the latency values are 
+variable with respect to Clock frequency.  
+
+Therefore for a given Clock frequency there is a programmable pipeline latency parameter contained in 
+the Mode Register that establishes the relative timing as to when received packets become operable.  
+
+For a Request Packet this latency is measured from the end of the Request Packet and for Burst Read 
+or Burst Write Cycles this establishes the time the DB[0:15] signals drive the first two bytes of the first 
+Word of the data requested by the burst operations.  
+
+For Serial Packets, the latency is measured from the end of the last bit of the Serial Packet and also sets 
+the time the DB[0:15] pins drive the first two bytes of the first Word of the data requested by the burst 
+operations. 
+
+ 
+
+3.9 Instruction Formats 
+
+The format for the Request Packet is shown in Table 7-1. There are several operation codes accessible 
+via the Request Packet: Burst Read, Burst Write, Mode Register Set, ZQ calibration, Utility Register 
+Read, Reset, Power Down, Deep Power Down, Activate, Precharge and Auto Burst Refresh.  
+
+The interpretation of address information is context sensitive depending on the operation commanded. 
+For any Burst Read or Burst Write cycle, they are interpreted as Column Address pins. For Burst Refresh 
+or Activate commands they are interpreted as Row Addresses.  
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    40 
+
+ 
+
+3.10 Burst Count and Burst Length 
+
+Burst transfer lengths are set by the Burst Count (BC[0:5]) field contained within the Request Packet. A 
+value of “0” corresponds to a single 32 byte quantity being transferred (ie a Word). A burst can therefore 
+range from 1 to 64 32-byte Words. The Burst Count only controls burst accesses unmodified by Serial 
+Packets, if the Address Streaming mode is activated during a burst (other than a Pipelined Activate), 
+then the Burst Count no longer controls the end of the cycle. In that case the DRAM cycle is ended by 
+using the Burst Stop command via the STB pin. If a Pipelined Activate is issued via the STB pin during a 
+Read Burst or Write Burst with no other Serial Packets supplied to the DRAM, the Burst Count 
+parameter remains in control of the burst length. Burst Count is defined is Table 7-3. 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    41 
+
+ 
+
+3.11 ZQ Calibration Command  
+
+The ZQ_CAL command is used to initiate the ZQ calibration command. This command is used to 
+calibrate the output driver impedance and on-die termination across process, temperature, and voltage.  
+RPC devices support ZQ calibration. 
+
+There are four ZQ calibration commands and related timings: tZQINIT, tZQRESET, tZQCL, and tZQCS. 
+tZQINIT is for initialization calibration; tZQRESET is for resetting ZQ to the default output impedance; 
+tZQCL is for long calibration(s); and tZQCS is for short calibration(s). The codes are defined in Table 7-4.  
+
+The initialization ZQ calibration (ZQINIT) must be performed for RPC. After initialization, the ZQ 
+calibration long (ZQCL) can be used to recalibrate the system to increase the accuracy of the output 
+impedance. A ZQ calibration short (ZQCS) can be used periodically to compensate for temperature and 
+voltage drift in the system. The ZQ reset command (ZQRESET) resets the output impedance calibration 
+to its default accuracy. This command is used to ensure output impedance accuracy when ZQCS and 
+ZQCL commands are not used. 
+
+One ZQCS command can effectively correct at least 1.5% (ZQCorrection) of output impedance errors 
+within tZQCS for all speed bins, assuming the maximum sensitivities specified are met. The appropriate 
+interval between ZQCS commands can be determined from using these tables and system-specific 
+parameters. 
+
+RPC devices are subject to temperature drift rate (Tdriftrate) and voltage drift rate (Vdriftrate) in various 
+applications. To accommodate drift rates and calculate the necessary interval between ZQCS commands, 
+apply the following formula: 
+
+ZQCorrection
+
+(Tsens x Tdriftrate) + (Vsens x Vdriftrate)
+
+Calibration Interval
+
+ 
+Where Tsens = MAX (dRONdT) and Vsens = MAX (dRONdV) define temperature and voltage sensitivities. 
+For example, if Tsens = 0.75%/°C, Vsens = 0.20%/mV, Tdriftrate = 1°C/sec, and Vdriftrate = 15mV/sec, 
+then the interval between ZQCS commands is calculated as: 
+
+1.5
+(0.75 x 1) + (0.20 x 15)
+0.4s
+
+ 
+A ZQ calibration command can only be issued when the device is in the idle state with all banks 
+precharged. ODT shall be disabled. No other activities can be performed on the data bus and the data 
+bus shall be un-terminated during calibration periods (tZQINIT, tZQCL, or tZQCS). The quiet time on the 
+data bus helps to accurately calibrate output impedance. There is no required quiet time after the ZQ 
+RESET command. If multiple devices share a single ZQ resistor, only one device can be calibrating at 
+any given time. After calibration is complete, the ZQ ball circuitry is disabled to reduce power consumption. 
+In systems sharing a ZQ resistor between devices, the controller must prevent tZQINIT, tZQCS, and 
+tZQCL overlap between the devices. ZQ RESET overlap is acceptable. 
+
+ZQ External Resistor Value, Tolerance, and Capacitive loading, In order to use the ZQ calibration function, 
+a 240 ohm ±1% tolerance external resistor connected between the ZQ pin and ground. The single resistor 
+can be used for each DRAM or one resistor can be shared between two DRAMs if the ZQ calibration 
+timings for each DRAM do not overlap. The total capacitive loading on the ZQ pin must be limited. 
+ 
+ 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    42 
+
+ 
+
+4 
+Power-Up Initialization 
+
+1) Apply power  
+
+- All inputs may be undefined  
+- The power voltage ramp time between 300 mV to VDDmin must be no greater than 200 ms 
+- During the ramp, VDD > VDDQ and (VDD - VDDQ) < 0.3 volts or VDD and VDDQ are driven from a 
+single power converter output 
+- At all time VDD1 must be equal to or larger than VDD. 
+- The voltage levels on all pins other than VDD1, VDD, VDDQ, VSS, VSSQ must be less than or 
+equal to VDDQ and VDD on one side and must be larger than or equal to VSSQ and VSS on the 
+other side 
+
+2) Clocks (CK, CK#) need to be started and stabilized for at least 200us 
+
+- Both CS# and STB should keep at High 
+
+3) Enter PU RESET State 
+
+- PU Reset Entry includes one Parallel Reset and consecutive two Serial Reset commands as shown 
+in Figure 4-2 
+- Minimum duration 5 us 
+- During this time, the DRAM will start internal state initialization. 
+
+4) Setup DRAM Mode Register 
+
+- Apply Pre Charge All command  
+- Apply MRS command. Note that Zout default setting is open, so it must be set as a non-zero value, 
+otherwise there will be no output from DRAM.  
+- Apply ZQ Calibration command.  
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    43 
+
+ 
+
+CLK
+
+VDD
+
+Power Ramp 
+Up <200ms
+
+STB
+
+CS#
+
+DQS
+
+Parallel Reset
+
+Clock Stable 
+>200us
+8 Cycles
+8 Cycles
+
+tRESET 5us
+
+Serial Reset
+Serial Reset
+
+CLK
+
+VDD
+
+STB
+
+CS#
+
+DQS
+
+DB[15:0]
+
+tRP
+tMOD
+
+PreCharge All
+MRS
+ZQ Calibration
+
+A
+
+A
+
+Exit Reset
+
+Exit Reset
+
+DB[15:0]
+
+tCSS
+
+tCSH tIH
+
+tZQINIT
+
+Valid CMD
+
+ 
+
+Figure 4-1. Power-Up Initialization Sequence 
+
+ 
+ 
+ 
+
+CLK
+
+STB
+
+CS#
+
+DQS
+
+Parallel Reset CMD
+
+DB[15:0]
+
+8 Cycles Serial Reset CMD
+8 Cycles Serial Reset CMD
+
+tCSH
+
+tIH
+
+ 
+
+Figure 4-2. Power-Up Reset Entry 
+
+ 
+ 
+ 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    44 
+
+ 
+
+5 
+Refreshing the DRAM Memory Array 
+
+Every row address in the memory must be accessed at least once within a 64 millisecond period to 
+guarantee reliable data retention. This period of time is called the Refresh Interval. At higher temperatures 
+and or at lower operating voltages the Refresh Interval will be derated. 
+
+Some applications may guarantee that any memory cells storing valid data are accessed within the 
+Refresh Interval. Furthermore applications such as a Panel Self Refresh frame buffer may not need to 
+retain data when placed into a low power state, such as when the screen is blanked while in power 
+savings states. In both of these scenarios, it is unnecessary for the DRAM to run Refresh Cycles. In 
+other cases Refresh Cycles will be required to guarantee reliable data retention.  
+
+There are two types of Refresh Modes – One Shot Mode or Loop Mode, that are defined by MRS 
+CSRFX bit. During refresh both DQS and DQS# will be driven “High” to indicate BUSY. In One Shot 
+Mode no command can be applied to DRAM in BUSY time. In Loop Mode CS# can be driven low pulse 
+to indicate Exit Refresh. The refresh period tREFi is defined by REFOP0 and REFOP1.  
+
+Setting REFOP0=0 and REFOP1=0 is Fast Refresh (FST RF) condition. The refresh period tREFi is 
+100ns when entering Refresh state. OneShot Refresh Mode with Fast Refresh period is similar to Auto 
+Refresh for standard DRAM except it is burst refreshing full specified banks in one command. 
+
+Setting REFOP0=1 and REFOP1=0 is Low Power Refresh (LP RF) condition. The refresh period tREFi 
+is 3.2us when entering Refresh state. Loop Refresh Mode with Low Power refresh period is similar to 
+Self Refresh for standard DRAM except that DRAM will complete to refresh all specified banks when 
+detecting CS# Low pulse to indicate Exit Refresh command. Note that under LP RF condition to refresh 
+four full banks will take 64ms. If the temperature Tcase > +85°C then it will violate the 32ms refresh time 
+and cause data lose.  
+ 
+Setting REFOP1=1 is not defined.   
+
+Note: It is constraint to refresh only one or two banks when setting REFOP0=1 and REFOP1=0 at 
+temperature Tcase > +85°C condition. The data in banks not selected to refresh might be lost after 
+expiring data retention time. 
+ 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    45 
+
+ 
+
+5.1 One Shot Mode Refresh: 
+
+If defined CSRFX=0 in MRS, the DRAM Refresh Type will be One Shot Mode. When receiving Refresh 
+command no matter in Parallel Mode or Serial Mode, it will precharge all banks first and then refresh 
+specified banks only one time before exiting to Idle State. When refresh is going on both DQS and DQS# 
+will be driving High to indicate BUSY. If the refresh is completed both DQS and DQS# will be driven Low 
+pulse before releasing to Hi-Z state. 
+
+ 
+ 
+
+CLK
+
+CS#
+
+DB
+
+STB
+
+DQS#
+DQS
+
+>= tCSH
+
+tRFQSL
+
+CS# should be kept H after tCSH until tRFQSd
+
+tRFQSd
+
+>=tCSS (10ns)
+
+Exit after finishing one loop of 
+refreshing specified banks
+
+REF
+
+ 
+
+Figure 5-1. PAR-OS_REF, Entry and Exit of OneShot Refresh in Idle or Standby state 
+ 
+ 
+
+CLK
+
+CS#
+
+DB
+
+STB
+
+DQS#
+DQS
+
+RL= AL+CL
+
+E0 O0 E1 O1 E2 O2 E3 O3 E4
+
+RD
+REF
+
+O4 E5 O5 E6 O6
+
+tRFQSd
+
+E7 O7
+
+tDQSCK
+
+Exit after finishing one loop of 
+refreshing specified banks
+
+8 cycles
+8 cycles
+
+tRFQSL
+
+NOP
+
+ 
+
+Figure 5-2. SER-OS_REF, Entry and Exit of OneShot Refresh in Serial Read Burst state 
+ 
+ 
+
+CLK
+
+CS#
+
+DB
+
+STB
+
+DQS#
+DQS
+
+E0 O0
+
+nWR
+WL= AL+CL
+
+E1 O1 E2 O2 E3 O3 E4 O4 E5
+
+WR
+REF
+
+O5 E6 O6 E7 O7
+
+tRFQSL
+
+tIH
+
+CS# should be kept H after tCSH until tRFQSd
+
+>=tCSH
+
+Exit after finishing one loop 
+of refreshing specified banks
+
+tRFQSd
+
+8 cycles
+8 cycles
+
+NOP
+
+ 
+Figure 5-3. SER-OS_REF, Entry and Exit of OneShot Refresh in Serial Write Burst state 
+ 
+ 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    46 
+
+ 
+
+5.2 Loop Mode Refresh : 
+
+If defined CSRFX=1 in MRS, the DRAM Refresh Type will be Loop Mode. When receiving Refresh 
+command no matter in Parallel Mode or Serial Mode, it will precharge all banks first, then the device will 
+continuously refresh all specified banks back and forth until receiving Exit Refresh signal. CS# should 
+keep “High” during refresh time and drive low pulse to indicate Exit Refresh. After receiving Exit Refresh, 
+the DRAM will complete refreshing all specified banks before exiting. No command can be applied 
+before DRAM fully exit refresh condition, that is, tPXCSL after both DQS/DQS# are driving from High to 
+Low pulse and then releasing to Hi-Z state. 
+
+ 
+
+CLK
+
+CS#
+
+DB
+
+STB
+
+DQS#
+DQS
+
+>= tCSH
+
+tRFQSL
+
+CS# should be kept H after tCSH until tRFQSd
+
+tRFQSd
+
+>=tCSS (10ns)
+
+REF
+
+Only after tRFQSd could pull CS# low pulse to exit Loop Refresh
+
+>= tCKSPE
+
+>=tCKSPX
+
+>=tPXCSL
+
+>=tCSLR
+
+1st CLK rising edge after DQS and DQS# go low
+ 
+
+Figure 5-4. PAR-Loop_REF, Entry and Exit of Loop Refresh in Idle or Standby state 
+ 
+ 
+
+RL= AL+CL
+
+E0 O0 E1 O1 E2 O2 E3 O3 E4
+
+RD
+REF
+
+O4 E5 O5 E6 O6
+
+tRFQSd
+
+E7 O7
+
+tDQSCK
+
+8 cycles
+8 cycles
+
+CLK
+
+CS#
+
+DB
+
+STB
+
+DQS#
+DQS
+
+NOP
+
+tCKSPE
+
+Only after tRFQSd could pull CS# low pulse to exit Loop Refresh
+
+>=tCSLR
+
+tRFQSL
+
+>=tCKSPX
+
+>=tPXCSL
+
+1st CLK rising edge after DQS and DQS# go low
+
+tDQSQ
+
+tCK
+
+ 
+Figure 5-5. SER- Loop_REF, Entry and Exit of Loop Refresh in Serial Read Burst state 
+ 
+ 
+
+tRFQSd
+
+tCKSPE
+
+Only after tRFQSd could pull CS# low pulse to exit Loop Refresh
+
+>=tCSLR
+
+tRFQSL
+
+>=tCKSPX
+
+>=tPXCSL
+
+1st CLK rising edge after DQS and DQS# go low
+
+E0 O0
+
+nWR
+WL= AL+CL
+
+E1 O1 E2 O2 E3 O3 E4 O4 E5
+
+WR
+REF
+
+O5 E6 O6 E7 O7
+
+tIH
+CS# should be kept H after tCSH until tRFQSd
+
+>=tCSH
+
+8 cycles
+8 cycles
+
+NOP
+
+CLK
+
+CS#
+
+DB
+
+STB
+
+DQS#
+DQS
+
+ 
+
+Figure 5-6. SER- Loop_REF, Entry and Exit of Loop Refresh in Serial Write Burst state 
+ 
+ 
+ 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    47 
+
+ 
+
+6 
+Multi Rank 
+
+RPC DRAM supports Dual Rank configurations, that is, 2 DRAMs sharing the same data bus. Because 
+the RPC DRAM uses the Data Bus to transport parallel commands, the commands are differentiated by 
+each DRAM having a unique CS# and STB# signal. In a two-rank configuration, when RPC_A 
+completes a Read/Write parallel command, the controller drives CS_A# to the High state, After satisfying 
+the hold time spec (tIH), the second RPC can now be accessed by driving CS_B# Low no sooner than 
+the next clock cycle. Then STB_B# is driven Low on the following clock cycle to transmit the parallel 
+command to RPC_B. If the controller is accessing one of the two RPCs, the other RPC has to wait for all 
+active transfers to complete and tCSS spec satisfied before it can receive valid commands. 
+
+Operations resulting in data being read from the RPC DRAM can be issued only to one RPC DRAM at a 
+time (Burst Read and UTR-R) to avoid bus contention. All other operations can be dispatched via the 
+Parallel Command Protocol to both RPC DRAMs at the same time. 
+
+STB_A
+
+DQS
+DQS#
+
+Activate 
+DB[15:0]
+
+tIS
+
+CLK
+ 
+
+Activate 
+
+CS#_A
+
+CS#_B
+
+tCSS (10ns)
+tCSH (5ns)
+
+tIH
+
+tIS
+
+tIH
+
+tCSH (5ns)
+
+Precharge
+
+tIS
+
+ 
+
+Precharge
+
+tCSS (10ns)
+tCSH (5ns)
+
+tIH
+
+tIS
+tIH
+
+tCSS (10ns)
+tCSH (5ns)
+
+STB_B
+
+tCSS (10ns)
+
+ 
+
+Figure 6-1. Parallel Active_A to Parallel Active_B and Parallel Precharge_A to Parallel Precharge_B 
+
+ 
+
+STB_A
+
+DQS
+DQS#
+
+Read
+DB[15:0]
+
+tIS
+
+CLK
+ 
+
+CS#_A
+
+CS#_B
+
+tCSS (10ns)
+
+O0 E1 O1 E2 O2 E3 O3 E4 O4 E5 O5 E6 O6 E7 O7
+E0
+
+Read
+
+tIS
+
+ 
+
+tCSS (10ns)
+
+O0 E1 O1 E2 O2 E3 O3 E4 O4 E5 O5 E6 O6 E7 O7
+E0
+
+RL
+
+tDQSCK
+tDQSCK
+RL
+tDQSCK
+
+Last burst
+
+STB_B
+
+ 
+
+Figure 6-2. Parallel Read_A to Parallel Read_B 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    48 
+
+ 
+
+STB_B
+
+DQS
+DQS#
+
+Write
+DB[15:0]
+
+tIS
+
+CLK
+ 
+
+CS#_A
+
+CS#_B
+
+tCSS (10ns)
+
+tIS
+
+ 
+
+WL
+
+DM DM DM E0 O0 E1 O1 E2 O2 E3 O3 E4 O4 E5 O5 E6 O6 E7 O7
+DM
+
+tIH
+
+Write
+
+tCSS (10ns)
+WL
+
+DM DM DM E0 O0 E1 O1 E2 O2 E3
+DM
+
+Last burst
+
+STB_A
+
+tCSH (5ns)
+
+ 
+
+Figure 6-3. Parallel Write_A to Parallel Write_B 
+
+ 
+
+ 
+
+STB_A
+
+DQS
+DQS#
+
+Read
+DB[15:0]
+
+tIS
+
+CLK
+
+CS#_A
+
+CS#_B
+
+tCSS (10ns)
+RL
+
+ 
+
+O0 E1 O1 E2 O2 E3 O3 E4 O4 E5 O5 E6 O6 E7 O7
+E0
+
+tIS
+
+tCSS (10ns)
+RL
+
+E7 O7
+
+tDQSCK
+
+Read
+
+BST
+
+tDQSCK
+
+RD or NOP
+
+ 
+
+O0 E1 O1 E2 O2 E3 O3 E4 O4 E5 O5 E6 O6 E7
+E0
+
+tDQSCK
+
+STB_B
+
+ 
+Figure 6-4. Parallel Read_A and Serial Read_A to Burst stop_A and Parallel Read_B 
+
+ 
+ 
+
+STB_B
+
+DQS
+DQS#
+
+Write
+DB[15:0]
+
+tIS
+
+CLK
+ 
+
+CS#_A
+
+CS#_B
+
+tCSS (10ns)
+
+tIH
+
+ 
+
+WL
+
+O0 E1 O1 E2 O2 E3 O3 E4 O4 E5 O5 E6 O6 E7 O7
+E0
+
+tIS
+
+tCSS (10ns)
+
+E7 O7
+
+tCSH (5ns)
+
+DM DM DM
+DM
+
+Write
+
+WL
+
+DM DM DM E0 O0 E1 O1 E2 O2 E3 O3 E4 O4 E5 O5 E6 O6 E7 O7
+DM
+
+tCSH (5ns)
+
+STB_A
+BST
+WR or NOP
+
+ 
+
+Figure 6-5. Parallel Write_A and Serial Write_A to Burst Stop_A and Parallel Write_B 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    49 
+
+ 
+
+CLK
+
+CS#_A
+
+DB
+
+STB_B
+
+DQS#
+DQS
+
+>= tCSH
+
+tRFQSL
+
+CS# should be kept H after tCSH until tRFQSd
+
+tRFQSd
+
+>=tCSS (10ns)
+
+REF
+
+Only after tRFQSd could pull CS# low pulse to exit Loop Refresh
+
+>= tCKSPE
+>=tCKSPX
+
+>=tPXCSL
+
+>=tCSLR
+
+1st CLK rising edge after DQS and DQS# go low
+
+STB_A
+
+CS#_B
+
+Valid
+
+tIS
+
+tCSS (10ns)
+
+ 
+
+Figure 6-6. PAR-Loop_REF, Entry and Exit of Loop Refresh in Idle or Standby state 
+
+ 
+
+Valid
+
+tIS
+
+tCSS (10ns)
+
+CLK
+
+CS#_A
+
+DB
+
+STB_A
+
+DQS#
+DQS
+
+>= tCSH
+
+tRFQSL
+
+CS# should be kept H after tCSH until tRFQSd
+
+tRFQSd
+>=tCSS (10ns)
+
+Exit after finishing one loop of 
+refreshing specified banks
+
+REF
+
+CS#_B
+
+STB_B
+
+ 
+
+Figure 6-7. PAR-OS_REF, Entry and Exit of OneShot Refresh in Idle or Standby state 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    50 
+
+ 
+
+7 
+Parallel/Serial Packet Formats & Op-code Assignments 
+
+Table 7-1. Parallel Packet Command Truth Table 
+
+Command 
+
+CLK 
+CS# 
+DB Pins 
+
+CKn-1 
+CKn 
+15 
+14 
+13 
+12 
+11 
+10 
+9 
+8 
+7 
+6 
+5 
+4 
+3 
+2 
+1 
+0 
+
+MRS 
+ 
+0 
+ODT 
+Zout 
+nWR 
+CL 
+0 
+1 
+0 
+
+ 
+0 
+0 
+ODT 
+PD 
+
+CSR
+FX 
+
+STB 
+ODT  
+X 
+0 
+
+ACT 
+ 
+0 
+X 
+BA1 
+BA0 
+1 
+0 
+1 
+
+ 
+0 
+X 
+RA11 
+RA10 
+RA9 
+RA8 
+RA7 
+RA6 
+RA5 
+RA4 
+RA3 
+RA2 
+RA1 
+RA0 
+0 
+
+RD 
+ 
+0 
+CA6 
+CA5 
+CA4 
+X 
+BC 
+BA1 
+BA0 
+0 
+0 
+0 
+
+ 
+0 
+CA9 
+CA8 
+CA7 
+X 
+0 
+
+WR 
+ 
+0 
+CA6 
+CA5 
+CA4 
+X 
+BC 
+BA1 
+BA0 
+0 
+0 
+1 
+
+ 
+0 
+CA9 
+CA8 
+CA7 
+X 
+0 
+
+WL-2 
+
+(1.st DM) 
+
+ 
+0 
+
+DM1 
+O3 
+
+DM0 
+O3 
+
+DM1 
+E3 
+
+DM0 
+E3 
+
+DM1 
+O2 
+
+DM0 
+O2 
+
+DM1 
+E2 
+
+DM0 
+E2 
+
+DM1 
+O1 
+
+DM0 
+O1 
+
+DM1 
+E1 
+
+DM0 
+E1 
+
+DM1 
+O0 
+
+DM0 
+O0 
+
+DM1 
+E0 
+
+DM0 
+E0 
+
+ 
+0 
+
+DM1 
+O3 
+
+DM0 
+O3 
+
+DM1 
+E3 
+
+DM0 
+E3 
+
+DM1 
+O2 
+
+DM0 
+O2 
+
+DM1 
+E2 
+
+DM0 
+E2 
+
+DM1 
+O1 
+
+DM0 
+O1 
+
+DM1 
+E1 
+
+DM0 
+E1 
+
+DM1 
+O0 
+
+DM0 
+O0 
+
+DM1 
+E0 
+
+DM0 
+E0 
+
+WL-1 
+
+(last DM) 
+
+ 
+0 
+
+DM1 
+O3 
+
+DM0 
+O3 
+
+DM1 
+E3 
+
+DM0 
+E3 
+
+DM1 
+O2 
+
+DM0 
+O2 
+
+DM1 
+E2 
+
+DM0 
+E2 
+
+DM1 
+O1 
+
+DM0 
+O1 
+
+DM1 
+E1 
+
+DM0 
+E1 
+
+DM1 
+O0 
+
+DM0 
+O0 
+
+DM1 
+E0 
+
+DM0 
+E0 
+
+ 
+0 
+
+DM1 
+O3 
+
+DM0 
+O3 
+
+DM1 
+E3 
+
+DM0 
+E3 
+
+DM1 
+O2 
+
+DM0 
+O2 
+
+DM1 
+E2 
+
+DM0 
+E2 
+
+DM1 
+O1 
+
+DM0 
+O1 
+
+DM1 
+E1 
+
+DM0 
+E1 
+
+DM1 
+O0 
+
+DM0 
+O0 
+
+DM1 
+E0 
+
+DM0 
+E0 
+
+PRE 
+ 
+0 
+X 
+BK3 
+BK2 
+BK1 
+BK0 
+X 
+1 
+0 
+0 
+
+ 
+0 
+X 
+0 
+
+REF 
+ 
+0 
+X 
+BK3 
+BK2 
+BK1 
+BK0 
+X 
+1 
+1 
+0 
+
+ 
+0 
+X 
+REF 
+OP1 
+
+REF 
+OP0 
+0 
+
+PD Entry 
+ 
+0 
+X 
+0 
+1 
+0 
+
+ 
+0 
+X 
+0 
+0 
+1 
+
+PD Exit 
+ 
+0 
+X 
+
+ 
+1 
+X 
+
+DPD Entry 
+ 
+0 
+X 
+0 
+1 
+0 
+
+ 
+0 
+X 
+1 
+0 
+1 
+
+DPD Exit 
+ 
+0 
+X 
+
+ 
+1 
+X 
+
+ZQ 
+
+Calibration 
+ 
+0 
+
+ZQC 
+OP1 
+
+ZQC 
+OP0 
+X 
+0 
+0 
+1 
+
+ 
+0 
+X 
+1 
+
+RESET 
+ 
+0 
+ X 
+0 
+0 
+0 
+
+ 
+0 
+X 
+1 
+
+UTR 
+ 
+0 
+X 
+UTR
+OP1 
+
+UTR
+OP0 
+
+UTR
+EN 
+1 
+1 
+1 
+
+ 
+0 
+X 
+0 
+
+ 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    51 
+
+ 
+ 
+
+Table 7-2. MRS Truth Table 
+
+Command 
+CLK 
+
+DB Pins 
+
+15 
+14 
+13 
+12 
+11 
+10 
+9 
+8 
+7 
+6 
+5 
+4 
+3 
+2 
+1 
+0 
+
+MRS 
+ 
+ODT 
+Zout 
+nWR 
+CL 
+0 
+1 
+0 
+
+ 
+0 
+ODT 
+PD 
+
+CSR
+FX 
+
+STB 
+ODT  
+X 
+0 
+
+ 
+
+CL 
+ 
+
+WL=RL 
+
+RL=AL*+CL 
+
+Write-only 
+
+(*AL=1) 
+
+DB [5:3]  
+
+000: CL=8 (default) 
+001: CL=10 
+010: CL=11 
+011: Reserved 
+100: Reserved 
+
+101: Reserved 
+110: CL=3 
+111: Reserved 
+
+nWR 
+ 
+Write-only 
+DB [8:6]  
+
+000: nWR=4 
+001: nWR=6 
+010: nWR=7 
+011: nWR=8 (default) 
+100: nWR=10 
+101: nWR=12 
+110: nWR=14 
+111: nWR=16 
+
+Zout 
+ 
+Write-only 
+DB [12:9]  
+
+xxx1: 23.7 ohm 
+0000: Open (output disabled, default) 
+0010: 120 ohm 
+0100: 90 ohm 
+0110: 51.4 ohm 
+1000: 60 ohm 
+1010: 40 ohm 
+
+1100: 36 ohm 
+1110: 27.7 ohm 
+
+ODT 
+ 
+Write-only 
+DB [15:13] 
+
+000: Open 
+001: 60 ohm  
+010: 45 ohm 
+011: 25.7 ohm 
+100: 30 ohm 
+101: 20 ohm 
+110: 18 ohm 
+111: 13.85 ohm 
+
+STBODT 
+ 
+Write-only 
+DB [12] 
+
+0: Disable ODT of STB (default) 
+1: Always enable ODT of STB 
+
+CSRFX 
+ 
+Write-only 
+DB [13] 
+
+0: Refresh specified BK once and return to idle state (default) 
+1: Continuously refresh specified BK until user mark CS# go low pulse 
+
+ODTPD 
+ 
+Write-only 
+DB [14] 
+
+0: ODT disabled by DRAM during PD (default)  
+1: ODT enabled by DRAM during PD 
+
+ 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    52 
+
+ 
+ 
+
+Table 7-3. Burst Count Truth Table 
+
+Command 
+CLK 
+
+DB Pins 
+
+15 
+14 
+13 
+12 
+11 
+10 
+9 
+8 
+7 
+6 
+5 
+4 
+3 
+2 
+1 
+0 
+
+RD 
+ 
+CA6 
+CA5 
+CA4 
+X 
+BC 
+BA1 
+BA0 
+0 
+0 
+0 
+
+ 
+CA9 
+CA8 
+CA7 
+X 
+0 
+
+WR 
+ 
+CA6 
+CA5 
+CA4 
+X 
+BC 
+BA1 
+BA0 
+0 
+0 
+1 
+
+ 
+CA9 
+CA8 
+CA7 
+X 
+0 
+
+ 
+
+BC 
+Burst Count 
+DB [10:5]  
+
+000000: 0 
+000001: 1 
+000010: 2 
+● 
+● 
+● 
+111101: 61 
+111110: 62 
+111111: 63 
+
+  
+ 
+Table 7-4. ZQCOP Truth Table 
+
+Command 
+CLK 
+
+DB Pins 
+
+15 
+14 
+13 
+12 
+11 
+10 
+9 
+8 
+7 
+6 
+5 
+4 
+3 
+2 
+1 
+0 
+
+ZQ 
+
+Calibration 
+ 
+
+ZQC 
+OP1 
+
+ZQC 
+OP0 
+X 
+0 
+0 
+1 
+
+ 
+X 
+1 
+
+ 
+
+ZQ 
+
+Calibration 
+
+ZQCOP 
+
+Write-only 
+
+DB [15:14]  
+
+00: Calibration after initialization 
+01: Long Calibration 
+10: Short Calibration 
+
+11: ZQ Reset 
+
+ 
+  
+ 
+Table 7-5. REFOP Truth Table 
+
+Command 
+
+CLK 
+DB Pins 
+
+CKn-1 
+CKn 
+15 
+14 
+13 
+12 
+11 
+10 
+9 
+8 
+7 
+6 
+5 
+4 
+3 
+2 
+1 
+0 
+
+REF 
+ 
+X 
+BK3 
+BK2 
+BK1 
+BK0 
+X 
+1 
+1 
+0 
+
+ 
+X 
+REF 
+OP1 
+
+REF 
+OP0 
+0 
+
+ 
+
+Refresh 
+
+Period 
+
+REFOP 
+DB [2:1] 
+
+00: FST Refresh : tREFi = 100ns 
+01: LP Refresh : tREFi = 3.2us 
+10: Reserved 
+11: Reserved 
+
+ 
+ 
+ 
+Table 7-6. UTREN Truth Table 
+
+Command 
+CLK 
+
+DB Pins 
+
+15 
+14 
+13 
+12 
+11 
+10 
+9 
+8 
+7 
+6 
+5 
+4 
+3 
+2 
+1 
+0 
+
+UTR 
+ 
+X 
+UTR
+OP1 
+
+UTR
+OP0 
+
+UTR
+EN 
+1 
+1 
+1 
+
+ 
+X 
+0 
+
+ 
+
+Utility 
+
+Register 
+
+Read 
+
+UTR 
+
+(Data Pattern) 
+
+DB [5:4] 
+
+00: 0101, 0101, 0101, 0101 
+01: 1100, 1100, 1100, 1100 
+10: 0011, 0011, 0011, 0011 
+11: 1010, 1010, 1010, 1010 
+
+  
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    53 
+
+ 
+ 
+
+Table 7-7. Serial Packet Truth Table (STB Pin) 
+
+ 
+
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Table 7-8. Serial Utility Truth Table 
+
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Bit 
+NOP 
+RD/WRB 
+ACT 
+Utility 
+Reset 
+
+0 
+1 
+0 
+1 
+0 
+0 
+
+1 
+1 
+1 
+0 
+0 
+0 
+
+2 
+X 
+BA0 
+BA0 
+Toggle RW 
+0 
+
+3 
+X 
+BA1 
+BA1 
+BST 
+0 
+
+4 
+X 
+RD/WRB 
+RA0 
+PRE 
+0 
+
+5 
+X 
+CA4 
+RA1 
+REF 
+0 
+
+6 
+X 
+CA5 
+RA2 
+BK0 
+0 
+
+7 
+X 
+CA6 
+RA3 
+BK1 
+0 
+
+8 
+X 
+CA7 
+RA4 
+BK2 
+0 
+
+9 
+X 
+CA8 
+RA5 
+BK3 
+0 
+
+10 
+X 
+CA9 
+RA6 
+REFOP0 
+0 
+
+11 
+X 
+X 
+RA7 
+REFOP1 
+0 
+
+12 
+X 
+X 
+RA8 
+X 
+0 
+
+13 
+X 
+X 
+RA9 
+X 
+0 
+
+14 
+X 
+X 
+RA10 
+X 
+0 
+
+15 
+X 
+X 
+RA11 
+X 
+0 
+
+Toggle RW 
+BST 
+PRE 
+REF 
+BK[0:3] 
+REFOP Specification 
+
+0 
+0 
+0 
+0 
+0 
+0 
+Reset (All bits are “0”) 
+
+0 
+0 
+0 
+1 
+V 
+V 
+BST then PRE All, start REF 
+
+0 
+0 
+1 
+0 
+V 
+X 
+Precharge specified bank 
+
+0 
+0 
+1 
+1 
+X 
+X 
+Not support 
+
+0 
+1 
+0 
+0 
+X 
+X 
+BST 
+
+0 
+1 
+0 
+1 
+X 
+X 
+Not support 
+
+0 
+1 
+1 
+0 
+V 
+X 
+BST then Precharge specified bank 
+
+0 
+1 
+1 
+1 
+X 
+X 
+Not support 
+
+1 
+X 
+X 
+X 
+X 
+X 
+Toggle RW 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    54 
+
+ 
+
+8 
+Command to Command Truth Tables 
+
+Table 8-1. Same Bank – PAR to SER 
+
+Current PAR 
+
+Next SER 
+MRS 
+ACT 
+READ 
+WRITE 
+PRE 
+REF (1) 
+
+NOP 
+Legal (10) 
+Legal (10) 
+Legal 
+Legal 
+Legal (10) 
+Legal (10) 
+
+ACT 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+
+READ 
+Illegal 
+Illegal 
+Legal 
+Illegal 
+Illegal 
+Illegal 
+
+WRITE 
+Illegal 
+Illegal 
+Illegal 
+Legal 
+Illegal 
+Illegal 
+
+UTLT Toggle RW 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+
+UTLT BST 
+Illegal 
+Illegal 
+Legal 
+Legal 
+Illegal 
+Illegal 
+
+UTLT PRE 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+
+UTLT BST+PRE 
+Illegal 
+Illegal 
+Legal 
+Legal 
+Illegal 
+Illegal 
+
+UTLT REF 
+Illegal 
+Illegal 
+Legal 
+Legal 
+Illegal 
+Illegal 
+
+ 
+Table 8-2. Different Bank – PAR to SER 
+
+Current PAR 
+
+Next SER 
+MRS 
+ACT 
+READ 
+WRITE 
+PRE 
+REF (1) 
+
+NOP 
+Legal (10) 
+Legal (10) 
+Legal 
+Legal 
+Legal (10) 
+Legal (10) 
+
+ACT (5) 
+Illegal 
+Illegal 
+Legal 
+Legal 
+Illegal 
+Illegal 
+
+READ 
+Illegal 
+Illegal 
+Legal 
+Illegal 
+Illegal 
+Illegal 
+
+WRITE 
+Illegal 
+Illegal 
+Illegal 
+Legal 
+Illegal 
+Illegal 
+
+UTLT Toggle RW 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+
+UTLT BST 
+Illegal 
+Illegal 
+Legal 
+Legal 
+Illegal 
+Illegal 
+
+UTLT PRE 
+Illegal 
+Illegal 
+Legal 
+Legal 
+Illegal 
+Illegal 
+
+UTLT BST+PRE 
+Illegal 
+Illegal 
+Legal 
+Legal 
+Illegal 
+Illegal 
+
+UTLT REF 
+Illegal 
+Illegal 
+Legal 
+Legal 
+Illegal 
+Illegal 
+
+ 
+Table 8-3. Same Bank – PAR to PAR 
+
+Current PAR 
+
+Next PAR 
+MRS 
+ACT 
+READ (2) 
+WRITE (2) 
+PRE 
+REF (1) 
+
+MRS 
+Legal 
+Legal 
+Legal 
+Legal 
+Legal 
+Legal 
+
+ACT 
+Legal (7) 
+Illegal 
+Illegal 
+Illegal 
+Legal 
+Legal 
+
+READ 
+Legal (8) 
+Legal 
+Legal 
+Legal 
+Illegal 
+Illegal 
+
+WRITE 
+Legal (8) 
+Legal 
+Legal 
+Legal 
+Illegal 
+Illegal 
+
+PRE 
+Legal 
+Legal 
+Legal 
+Legal 
+Illegal (11) 
+Illegal (11) 
+
+REF 
+Legal 
+Legal 
+Legal 
+Legal 
+Legal 
+Legal 
+
+ 
+Table 8-4. Different Bank – PAR to PAR 
+
+Current PAR 
+
+Next PAR 
+MRS 
+ACT 
+READ (2) 
+WRITE (2) 
+PRE 
+REF (1) 
+
+MRS 
+Legal 
+Legal 
+Legal 
+Legal 
+Legal 
+Legal 
+
+ACT (5) 
+Legal (7) 
+Legal 
+Legal 
+Legal 
+Legal 
+Legal 
+
+READ 
+Legal (8) 
+Legal 
+Legal 
+Legal 
+Legal 
+Illegal 
+
+WRITE 
+Legal (8) 
+Legal 
+Legal 
+Legal 
+Legal 
+Illegal 
+
+PRE 
+Legal 
+Legal 
+Legal 
+Legal 
+Legal 
+Illegal (11) 
+
+REF 
+Legal 
+Legal 
+Legal 
+Legal 
+Legal 
+Legal 
+
+ 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    55 
+
+ 
+
+Table 8-5. Same Bank – SER to SER 
+
+Current SER 
+
+Next SER 
+
+NOP 
+ACT 
+READ 
+WRITE 
+UTLT Toggle 
+RW 
+UTLT BST 
+UTLT 
+PRE 
+
+UTLT 
+BST+PRE 
+
+UTLT 
+REF (1) 
+
+NOP 
+Legal 
+Legal 
+Legal 
+Legal 
+Legal (9, 9-1) 
+Legal (10) 
+Legal 
+Legal (10) 
+Legal (10) 
+
+ACT 
+Legal 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+Legal 
+Illegal 
+Illegal 
+
+READ 
+Legal (3) 
+Legal (3) 
+Legal 
+Illegal 
+Legal (9, 9-1) 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+
+WRITE 
+Legal (4) 
+Legal (4) 
+Illegal 
+Legal 
+Legal (9, 9-1) 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+
+UTLT Toggle RW 
+Legal 
+Legal 
+Legal 
+Legal 
+Illegal 
+Illegal 
+Legal 
+Illegal 
+Illegal 
+
+UTLT BST 
+Legal 
+Legal 
+Legal 
+Legal 
+Illegal 
+Illegal 
+Legal 
+Illegal 
+Illegal 
+
+UTLT PRE 
+Legal 
+Legal 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+Illegal (11) 
+Illegal 
+Illegal 
+
+UTLT BST+PRE 
+Legal 
+Legal 
+Legal 
+Legal 
+Illegal 
+Illegal 
+Legal 
+Illegal 
+Illegal 
+
+UTLT REF 
+Legal 
+Legal 
+Legal 
+Legal 
+Illegal 
+Illegal 
+Legal 
+Illegal 
+Illegal 
+
+ 
+Table 8-6. Different Bank – SER to SER 
+
+Current SER 
+
+Next SER 
+
+NOP 
+ACT 
+READ 
+WRITE 
+UTLT Toggle 
+RW 
+UTLT BST 
+UTLT 
+PRE 
+
+UTLT 
+BST+PRE 
+
+UTLT 
+REF (1) 
+
+NOP 
+Legal 
+Legal 
+Legal 
+Legal 
+Legal (9, 9-1) 
+Legal (10) 
+Legal 
+Legal (10) 
+Legal (10) 
+
+ACT (5) 
+Legal 
+Legal 
+Legal 
+Legal 
+Illegal 
+Illegal 
+Legal 
+Illegal 
+Illegal 
+
+READ 
+Legal 
+Legal 
+Legal 
+Illegal 
+Legal (9, 9-1) 
+Illegal 
+Legal 
+Illegal 
+Illegal 
+
+WRITE 
+Legal 
+Legal 
+Illegal 
+Legal 
+Legal (9, 9-1) 
+Illegal 
+Legal 
+Illegal 
+Illegal 
+
+UTLT Toggle RW 
+Legal 
+Legal 
+Legal 
+Legal 
+Illegal 
+Illegal 
+Legal 
+Illegal 
+Illegal 
+
+UTLT BST 
+Legal 
+Legal 
+Legal 
+Legal 
+Illegal 
+Illegal 
+Legal 
+Illegal 
+Illegal 
+
+UTLT PRE 
+Legal 
+Legal 
+Legal 
+Legal 
+Illegal 
+Illegal 
+Legal 
+Illegal 
+Illegal 
+
+UTLT BST+PRE 
+Legal 
+Legal 
+Legal 
+Legal 
+Illegal 
+Illegal 
+Legal 
+Illegal 
+Illegal 
+
+UTLT REF 
+Legal 
+Legal 
+Legal 
+Legal 
+Illegal 
+Illegal 
+Legal 
+Illegal 
+Illegal 
+
+ 
+Table 8-7. Same Bank – SER to PAR 
+
+Current SER 
+Next PAR 
+NOP 
+ACT 
+READ 
+WRITE 
+UTLT Toggle 
+RW 
+UTLT BST (6) 
+UTLT 
+PRE 
+
+UTLT 
+BST+PRE (6) 
+
+UTLT 
+REF (1) 
+
+MRS 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+Legal 
+Illegal 
+Legal 
+Legal 
+
+ACT 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+Legal 
+Legal 
+
+READ 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+Legal 
+Illegal 
+Illegal 
+Illegal 
+
+WRITE 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+Legal 
+Illegal 
+Illegal 
+Illegal 
+
+PRE 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+Legal 
+Illegal 
+Illegal (11) 
+Illegal (11) 
+
+REF 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+Legal 
+Illegal 
+Legal 
+Legal 
+
+ 
+Table 8-8. Different Bank – SER to PAR 
+
+Current SER 
+
+Next PAR 
+
+NOP 
+ACT 
+READ 
+WRITE 
+UTLT Toggle 
+RW 
+UTLT BST (6) 
+UTLT 
+PRE 
+
+UTLT 
+BST+PRE (6) 
+
+UTLT 
+REF (1) 
+
+MRS 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+Legal 
+Illegal 
+Legal 
+Legal 
+
+ACT (5) 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+Legal 
+Illegal 
+Legal 
+Legal 
+
+READ 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+Legal 
+Illegal 
+Legal 
+Illegal 
+
+WRITE 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+Legal 
+Illegal 
+Legal 
+Illegal 
+
+PRE 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+Legal 
+Illegal 
+Legal 
+Illegal (11) 
+
+REF 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+Illegal 
+Legal 
+Illegal 
+Legal 
+Legal 
+
+Notes:  
+1. Must finish REF sequence and satisfy specific timing. 
+2. Must achieve specified burst count and satisfy specific timing. 
+3. The current state should be PAR-READING or SER-READING. If current state is PAR-READING, issued SER-CMD number should not 
+exceed burst count. 
+4. The current state should be PAR-WRITING or SER-WRITING. If current state is PAR-WRITING, issued SER-CMD number should not 
+exceed burst count 
+5. Specified bank should be at precharged state. 
+6. Any PAR-CMD after SER-BST should satisfy specific timing. 
+7. The previous state of MRS should be precharged state. 
+8. The previous state of MRS should be active state. 
+9. Number of Bubble NOP following Toggle R/W command is defined in Table 3-1.  
+9.1 The max. Bubbles number is 80 clks to avoid staying in serial mode without actually doing read or write. 
+10. During next Serial NOP command, STB must keep High from t0 through t15 (entire 8 clks). 
+11. Target bank should be in precharged state. 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    56 
+
+ 
+
+9 
+Absolute Maximum Ratings 
+
+Table 9-1. Absolute Maximum Ratings 
+
+Symbol 
+Parameter 
+
+EM6GA16L 
+
+Unit 
+
+Min. 
+Max. 
+
+VDD 
+Voltage on VDD pin relative to Vss 
+-0.4 
+1.8 
+V 
+
+VDDQ 
+Voltage on VDDQ pin relative to Vss  
+-0.4 
+1.8 
+V 
+
+VDD1 
+Voltage on VDD1 pin relative to Vss  
+-0.4 
+1.8 
+V 
+
+ 
+ 
+
+10 Input/Output Capacitance 
+
+Table 10-1. Capacitance 
+
+Symbol 
+Parameter 
+
+KGD 
+FBGA / WLCSP 
+
+Unit 
+
+Min. 
+Max. 
+Min. 
+Max. 
+
+CCK 
+Input Capacitance (CLK, CLK#) 
+0.2  
+0.9  
+0.5  
+2.7  
+pF 
+
+CDCK 
+Input capacitance delta (CLK, CLK#) 
+0  
+0.15  
+0  
+0.2 
+pF 
+
+CI 
+Input capacitance (CS#) 
+0.2  
+0.9  
+0.5  
+1.9 
+pF 
+
+CIO 
+Input/output capacitance (DB, DQS, DQS#, STB) 
+0.3  
+2 
+1.0  
+3.3  
+pF 
+
+CDDQS 
+Input/output capacitance delta (DQS, DQS#) 
+0  
+0.2  
+0  
+0.2  
+pF 
+
+CDIO 
+Input/output capacitance delta (DB, STB) 
+-0.25  
+0.25  
+-0.25  
+0.25  
+pF 
+
+CZQ 
+Input/output capacitance ZQ Pin 
+0  
+2  
+0  
+3 
+pF 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    57 
+
+ 
+
+11 D.C. & A.C. Operating Conditions 
+
+11.1 Operating Conditions 
+
+Table 11-1. Recommended Operating Conditions 
+
+Symbol 
+Parameter 
+Min. 
+Typ. 
+Max. 
+Unit 
+Note 
+
+VDD1 
+Supply voltage 
+1.425 
+1.5 
+1.575 
+V 
+1-3 
+
+VDD 
+Supply voltage 
+1.425 
+1.5 
+1.575 
+V 
+1-3 
+
+VDDQ 
+Supply voltage for IO 
+1.425 
+1.5 
+1.575 
+V 
+1-3 
+
+VIH(AC) 
+AC input logic high  
+VREF + 0.3 
+- 
+- 
+V 
+ 
+
+VIL(AC) 
+AC input logic Low 
+- 
+- 
+VREF - 0.3 
+V 
+ 
+
+VIH(DC) 
+DC input logic high  
+VREF + 0.100 
+- 
+- 
+V 
+ 
+
+VIL(DC) 
+DC input logic Low 
+- 
+- 
+VREF - 0.100 
+V 
+ 
+
+VREF 
+Reference Voltage for DB, CS#, STB inputs 
+0.49 x VDD 
+- 
+0.51 x VDD 
+V 
+ 
+
+NOTE1: The DC value is the linear average of VDD1/VDD/VDDQ(t) over a very long period of time (e.g., 1 sec).  
+NOTE2: If maximum limit is exceeded, input levels shall be governed by RPC DRAM specifications.  
+NOTE3: Under these supply voltages, the device operates to this RPC DRAM specification. 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    58 
+
+ 
+
+11.2 D.C. Parameters 
+
+Table 11-2. IDD specification parameters and test conditions 
+
+(VDD1 = VDD = VDDQ = 1.5V ±0.075, TOPER = -40~95 C) 
+
+Parameter & Test Condition 
+Symbol 
+1600 
+Unit 
+Max. 
+
+Operating One Bank Active-Precharge Current 
+CK: On; CS#: High between ACT and PRE; STB: High between ACT and PRE; 
+Command, DB[0:15]: valid command; Bank Activity: Cycling with one bank active at 
+a time: 0,1,2,3,0,...; Output Buffer: Zout=Open; ODT=Open 
+
+IDD0 
+70 
+mA 
+
+Operating One Bank Active-Read-Precharge Current 
+CK: On; BC: 0; CS#: High between ACT, RD and PRE; STB: High between ACT, RD 
+and PRE; DB[0:15]: valid command; Data Pattern: partially toggling; Bank Activity: 
+Cycling with one bank active at a time: 0,1,2,3,0,...; Output Buffer: Zout=Open; 
+ODT=Open 
+
+IDD1 
+90 
+mA 
+
+Precharge Standby Current 
+CK: On; CS#: stable at 1; STB: stable at 1; DB[0:15]: MID-LEVEL; Bank Activity: all 
+banks closed; Output Buffer: Zout=Open; ODT=Open 
+
+IDD2N 
+16 
+mA 
+
+Precharge Power-Down Current 
+CK: On; CS#: stable at 0; STB: stable at 1; DB[0:15]: MID-LEVEL; Bank Activity: all 
+banks closed; Output Buffer: Zout=Open; ODT=Open; Power Down Mode: Enabled; 
+
+IDD2P 
+4.55 
+mA 
+
+Active Standby Current 
+CK: On; CS#: stable at 1; STB: stable at 1; DB[0:15]: MID-LEVEL; Bank Activity: all 
+banks opened; Output Buffer: Zout=Open; ODT=Open 
+
+IDD3N 
+30 
+mA 
+
+Active Power-Down Current 
+CK: On; CS#: stable at 0; STB: stable at 1; DB[0:15]: MID-LEVEL; Bank Activity: all 
+banks opened; Output Buffer: Zout=Open; ODT=Open; Power Down Mode: 
+Enabled; 
+
+IDD3P 
+8.5 
+mA 
+
+Operating Burst Read Current 
+CK: On; BC: Don't Care; CS#: stable at 1; STB: enter Serial Mode and cycling RD 
+commands through banks 1,2,3,0,1, ... for every burst; Bank Activity: all banks 
+opened; Output Buffer: Zout=Open; ODT=Open; Data pattern is 00110011 
+00110011; 
+
+IDD4R 
+115 
+mA 
+
+Operating Burst Write Current 
+CK: On; BC: Don't Care; CS#: stable at 0; STB: enter Serial Mode and cycling WR 
+commands through banks 1,2,3,0,1, ... for every burst; Bank Activity: all banks 
+opened; Output Buffer: Zout=Open; ODT=Open; Data pattern is 00110011 
+00110011; 
+
+IDD4W 
+135 
+mA 
+
+FST Refresh Current 
+CK/CK#: stable at 0/1 after tCKSPE; CS#: stable at 1; STB: stable at 1; DB[0:15]: 
+MID-LEVEL; Bank Activity: all banks closed; Output Buffer: Zout=Open; 
+ODT=Open; Refresh command: Enabled with REFOP0=0; 
+
+IDD6_FST 
+40 
+mA 
+
+LP Refresh Current 
+CK/CK#: stable at 0/1 after tCKSPE; CS#: stable at 1; STB: stable at 1; DB[0:15]: 
+MID-LEVEL; Bank Activity: all banks closed; Output Buffer: Zout=Open; 
+ODT=Open; Refresh command: Enabled with REFOP0=1; 
+
+IDD6_LP 
+5.5 
+mA 
+
+Deep-Power-Down Current 
+CK: On; CS#: stable at 0; STB: stable at 1; DB[0:15]: MID-LEVEL; Bank Activity: all 
+banks closed; Output Buffer: Zout=Open; ODT=Open; Deep-Power Down Mode: 
+Enabled; 
+
+IDD9 
+620 
+uA 
+
+Note 1. Burst Length: fixed BL16. 
+Note 2. Output Buffer Enabled 
+Note 3. Operating Read/Write Mode might enter Serial Burst Mode 
+Note 4. FST Refresh: REFOP0=0, LP Refresh: REFOP0=1 
+ 
+ 
+ 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    59 
+
+ 
+
+11.3 A.C. Parameters 
+
+Table 11-3. Recommended AC Parameters  
+
+(VDD1 = VDD = VDDQ = 1.5V ±0.075, TOPER = -40~95 C) 
+
+Symbol 
+Parameter 
+
+Speed-1600 CL=11 
+
+Unit 
+Min. 
+Max. 
+
+tRCD 
+ACT to internal read or write delay time 
+13.75 
+- 
+ns 
+
+tRP 
+PRE command period 
+13.75 
+- 
+ns 
+
+tRC 
+ACT to ACT or REF command period 
+48.75 
+- 
+ns 
+
+tRAS 
+ACTIVE to PRECHARGE command period 
+35 
+- 
+ns 
+
+tCK(avg) 
+Average clock period  
+
+CL=3, 250 MHz (500 MTPS/pin) 
+4 
+- 
+ns 
+
+CL=8, 400 MHz (800 MTPS/pin) 
+2.5 
+- 
+ns 
+
+CL=8, 600 MHz (1200 MTPS/pin) 
+1.667 
+- 
+ns 
+
+CL=10, 667 MHz (1333 MTPS/pin) 
+1.5 
+- 
+ns 
+
+CL=11, 800 MHz (1600 MTPS/pin) 
+1.25 
+- 
+ns 
+
+tRESET 
+Reset time 
+5 
+- 
+us 
+
+tCSS 
+CS# Setup Time 
+10 
+- 
+ns 
+
+tCSH 
+CS# Hold Time 
+5 
+- 
+ns 
+
+tWR 
+WRITE recovery time 
+15 
+- 
+ns 
+
+tMRD 
+Mode Register Set command cycle time 
+4 
+- 
+tCK 
+
+tRRD 
+ACTIVE to ACTIVE command period  
+7.5 
+- 
+ns 
+
+tIS 
+CS# setup time to CK, CK# referenced to VIH(AC)/VIL(AC) levels 
+170 
+- 
+ps 
+
+tIH 
+CS# hold time from CK, CK# referenced to VIH(DC)/VIL(DC) levels 
+120 
+- 
+ps 
+
+tIS_STB
+*1 
+STB setup time to CK, CK# referenced to VIH(AC)/VIL(AC) levels 
+10 
+- 
+ps 
+
+tIH_STB
+*1 
+STB hold time from CK, CK# referenced to VIH(DC)/VIL(DC) levels 
+45 
+- 
+ps 
+
+tDS
+*2 
+Data setup time to DQS, DQS# referenced to VIH(AC)/VIL(AC) levels 
+10 
+- 
+ps 
+
+tDH
+*2 
+Data hold time from DQS, DQS# referenced to VIH(DC)/VIL(DC) 
+levels 
+45 
+- 
+ps 
+
+Refresh 
+Data retention time 
+
+-40°C ~ +85°C 
+- 
+64 
+ms 
+
++85°C ~ +95°C 
+- 
+32 
+ms 
+
+tDQSCK 
+DQS, DQS# rising edge output access time from rising CK, CK# 
+2.5 
+7 
+ns 
+
+tDQSQ 
+DQS, DQS# to DB skew, per group, per access 
+- 
+135 
+ps 
+
+tREFI 
+Average periodic refresh interval 
+
+FST Refresh : REFOP0=0 
+100 
+ns 
+
+LP Refresh : REFOP0=1 
+3.2 
+us 
+
+tPPD 
+Delay time from one parallel command to next 
+parallel command 
+
+Activate state 
+8 or 8’s multiples 
+tCK 
+
+Idle state 
+4 
+- 
+tCK 
+
+tWPRE 
+DQS, DQS# differential WRITE Preamble 
+0.9 
+- 
+tCK 
+
+tWPST 
+DQS, DQS# differential WRITE Postamble 
+
+CL=3 
+0.5 
+- 
+tCK 
+
+CL=8, 10~11 
+4.5 
+- 
+tCK 
+
+tMOD 
+Mode Register Set command update delay 
+Min: max (12tCK, 15ns) 
+tCK 
+
+tBESL 
+End of Burst to STB Low 
+
+Read 
+9 
+- 
+tCK 
+
+Write 
+11 
+- 
+tCK 
+
+tDPD 
+Minimum DPD period 
+500 
+- 
+us 
+
+tINIT 
+Latency from Deep Power Down Exit to valid command 
+200 
+- 
+us 
+
+tRFQSL 
+DQS/DQS# Low time after exit BUSY state 
+5 
+- 
+ns 
+
+tCKSPE 
+Valid clock requirement after refresh entry, PD or DPD entry 
+10 
+- 
+tCK 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    60 
+
+tCKSPX 
+Valid clock requirement before refresh exit, PD or DPD exit 
+10 
+- 
+tCK 
+
+tRFQSd 
+Latency from Refresh command to DQS/DQS# High (BUSY) state 
+- 
+3 x tREFI 
+ 
+
+tPXCSL 
+Latency from exiting Refresh or PD Mode to CS# go low  
+10 
+- 
+ns 
+
+tCSLR 
+CS# low pulse range for loop mode refresh 
+2 
+5 
+ns 
+
+tRTW 
+Delay from Toggle R/W in Read Burst 
+transfer to Write Burst command 
+
+CL=3 
+0 
+80 
+tCK 
+
+CL=8, 10~11 
+8 
+80 
+tCK 
+
+tWTR 
+Delay from Toggle R/W in Write Burst 
+transfer to Read Burst command 
+
+CL=3 
+0 
+80 
+tCK 
+
+CL=8, 10~11 
+8 
+80 
+tCK 
+
+tLZ(DQS) 
+DQS Low-Z from clock 
+Min: tDQSCK (MIN) - 300 
+ps 
+
+tLZ(DB) 
+DB Low-Z from clock 
+Min: tDQSCK (MIN) - 300 
+ps 
+
+tHZ(DQS) 
+DQS High-Z from clock 
+Max: tDQSCK,(MAX) - 100 
+ps 
+
+tHZ(DB) 
+DB High-Z from clock 
+Max: tDQSCK,(MAX) + (1.4 × tDQSQ,(MAX)) 
+ps 
+
+tZQINIT 
+Initialization calibration time 
+2 
+- 
+us 
+
+tZQCL 
+Long calibration time 
+360 
+- 
+ns 
+
+tZQCS 
+Short calibration time 
+90 
+- 
+ns 
+
+tZQRESET 
+Calibration RESET time 
+50 
+- 
+ns 
+
+tRPRE 
+READ preamble 
+0.9 
+- 
+tCK 
+
+tRPST 
+READ postamble 
+0.3 
+- 
+tCK 
+
+tCKE 
+Minimum power down period time  
+Min: max(7.5ns,3nCK) 
+ns 
+
+tDQSS 
+DQS, DQS# rising edge to CK, CK# rising edge 
+-0.25 
+0.25 
+tCK 
+ 
+Note 1. For Speed-1600, ac/dc referenced for 1V/ns STB-slew rate and 2V/ns CK slew rate. 
+Note 2. For Speed-1600, ac/dc referenced for 1V/ns DQ-slew rate and 2V/ns DQS slew rate. 
+ 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    61 
+
+ 
+
+12 Timing Waveform 
+
+ 
+
+CLK
+
+STB
+
+CS#
+
+DQS
+
+tCSS
+
+DB[15:0]
+
+tIH
+tIS
+
+tDS
+tDH
+
+tCSH
+
+tIS_STB
+
+tIH_STB
+
+Note:
+Parallel Command can be issued one command at a time. 
+The next Parallel Command can not be issued before meeting tPPD or other timing constraint (tRRD, tRCD, ...)
+
+tCSS
+
+tIH
+tIS
+
+tDS
+tDH
+
+tCSH
+
+tIS_STB
+tIH_STB
+
+tPPD
+
+ 
+Figure 12-1. Parallel Request Packet Timing 
+
+ 
+
+CLK
+
+STB
+
+CS#
+
+DQS
+
+Activate Bank X
+
+DB[15:0]
+
+Activate Bank Y
+
+tRRD
+tRCD
+
+Notes:
+1. Parallel Commands includes Activate, Pre Charge, Refresh, MRS Setting, Read, Write.
+2. If Burst Read/Write doesn’t initiate Serial CMD by sending all NOP until end of Burst Count, 
+    The burst will stop after Burst Count is satisfied. The next Parallel CMD can be issued later.
+3. Fixed AL=1
+
+tIS_STB
+tIH_STB
+
+Read Bank X
+Next CMD
+Burst Count
+
+RL(AL+CL)+tDQSCK
+
+CLK
+
+STB
+
+CS#
+
+DQS
+
+DB[15:0]
+
+A
+
+Data  Transfer
+
+A
+
+ 
+
+Figure 12-2. Back to Back Parallel Command (with Parallel Burst Read) 
+
+ 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    62 
+
+ 
+ 
+
+CLK
+
+STB
+
+CS#
+
+DQS
+
+Activate Bank X
+
+DB[15:0]
+
+Activate Bank Y
+
+tRRD
+tRCD
+
+Notes:
+1. Parallel Commands includes Activate, Pre Charge, Refresh, MRS Setting, Read, Write.
+2. If Burst Read/Write doesn’t initiate Serial CMD by sending all NOP until end of Burst Count, 
+    The burst will stop after Burst Count is satisfied. The next Parallel CMD can be issued later.
+3. Fixed AL=1
+
+tIS_STB
+tIH_STB
+
+Write Bank X
+Precharge Bank X 
+
+CLK
+
+STB
+
+CS#
+
+DQS
+
+DB[15:0]
+
+A
+
+WL(AL+CL)
+
+Write Mask
+
+tWR
+
+A
+Burst Count
+
+Data  Transfer
+
+ 
+
+Figure 12-3. Back to Back Parallel Command (with Parallel Burst Write) 
+
+ 
+
+ 
+
+CLK
+
+STB
+
+CS#
+
+DQS
+
+PCOM_1
+
+DB[15:0]
+
+tPPD
+
+Notes:
+1. PCOM_1, PCOM_2 could be Activate, Pre Charge or MRS Setting.
+2. PCOM_3 could be any parallel command includes Activate, Pre Charge, Refresh, MRS Setting, Read, Write.  
+
+tIS_STB
+tIH_STB
+
+tPPD
+
+PCOM_2
+PCOM_3
+
+ 
+
+Figure 12-4. Back to Back Parallel Command (without Parallel Burst Write/Read) 
+
+ 
+
+ 
+
+ 
+ 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    63 
+
+ 
+ 
+
+CLK
+
+STB
+
+CS#
+
+DQS
+
+P-CMD
+Write Bank A
+
+AL+CL
+
+DB[15:0]
+
+Execute P-CMD
+
+8 Cycles Serial CMD
+
+Write Data to Bank A
+
+Execute S-CMD 1 
+
+Notes:
+1. Assume Bank A already be Activated 
+    Valid S-CMD (Serial Command) includes: Activate or Pre Charge Bank B/C/D when Bank A is bursting,
+    Write Burst to Bank A/B/C/D, NOP, Toggle Write to Read, Burst Stop w/ or w/o Pre Charge, Refresh.
+2. Fixed AL=1
+
+DM DM DM DM
+Write Mask
+
+S-CMD 1
+
+8 tCK
+
+AL=1
+CL=10
+
+8 tCK
+
+tDS tDH
+
+S-CMD 2
+S-CMD 3
+
+tDQSS
+tDQSS
+
+ 
+
+Figure 12-5. Burst Write to Serial Command 
+
+ 
+ 
+ 
+
+STB
+
+DQS
+DQS#
+
+Write
+DB[15:0]
+
+CLK
+ 
+
+tCSS (10ns)
+
+DM DM DM E0 O0 E1 O1 E2 O2 E3
+DM
+
+tWPST = 4.5 clks @ CL=10
+
+WL = AL+CL
+
+tWPST = 4.5 clks 
+
+STB
+
+DQS
+DQS#
+
+Write
+DB[15:0]
+
+CLK
+ 
+
+tCSS (10ns)
+
+WL = AL+CL
+
+DM DM DM E0 O0 E1 O1 E2 O2 E3 O3 E4 O4 E5 O5 E6 O6 E7
+DM
+
+tWPST = 0.5 clks 
+
+tWPST = 0.5 clks @ CL=3
+
+ 
+
+Figure 12-6. tWPST in Low Latency 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    64 
+
+ 
+ 
+
+CLK
+
+STB
+
+CS#
+
+DQS
+
+Refresh
+CMD
+
+DB[15:0]
+
+Next CMD
+
+tCKSPE
+tCKSPX
+
+Can stop Toggling
+
+Refreshing 1~4 Full Banks
+
+DQS/DQSB both keep High*1
+
+Notes:
+1. During Refresh, DRAM will drive both DQS and DQSB “High” To indicate DRAM Busy state. 
+    Each refresh CMD refreshes 1~4 full bank. Refresh can easily assign to full cell, partial banks
+2. MRS’s CSRFX=1, after tFRQSd, CS# is allowed to pull low pulse.  
+
+tRFQSL
+
+tCSH
+tIH
+
+tRFQSd 
+(max 3 tREFi)
+
+tPXCSL
+
+DQS(B) both start pulling High
+DQS(B) both start pulling Low
+
+MRS’s CSRFX=1*2
+
+tCSLR
+
+ 
+
+Figure 12-7. Full Bank Auto Burst Refresh 
+
+ 
+
+ 
+
+ 
+
+CLK
+
+STB
+
+CS#
+
+DQS
+
+P-CMD
+Read Bank A
+
+AL+CL
+
+DB[15:0]
+
+Execute P-CMD
+
+8 Cycles Serial CMD
+
+Read Data from Bank A
+
+Execute S-CMD 1 
+
+S-CMD 1
+
+8 tCK
+
+    S-CMD 2
+
+AL=1
+CL=10
+
+8 tCK
+
+Notes:
+1. Assume Bank A already be Activated 
+    Valid S-CMD (Serial Command) includes: Activate or Pre Charge Bank B/C/D when Bank A is bursting,
+    Read Burst to Bank A/B/C/D, NOP, Toggle Read to Write, Burst   Stop w/ or w/o Pre Charge, Refresh.
+2. Fixed AL=1
+
+tDQSCK
+tLZ(DQS)
+
+tLZ(DB)
+
+tRPRE
+
+    S-CMD 3
+
+ 
+
+Figure 12-8. Burst Read to Serial Command 
+
+ 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    65 
+
+ 
+
+CLK
+
+STB
+
+CS#
+
+DQS
+
+Bank 0 Burst Transfer
+Bank 0 Burst Transfer
+
+8 Cycles Serial CMDs
+
+Keep Low
+
+NOP
+B1
+NOP
+P0
+NOP
+A0
+NOP
+B0
+NOP
+P1
+NOP
+A1
+
+Bank 1 Burst Transfer
+
+Precharge
+Activate
+
+NOP
+
+X
+X+1
+X+2
+X+3
+Y
+Y+1
+Y+2
+Y+3
+Y+4
+Y+5
+Z+2
+Z+1
+Z
+
+Precharge
+
+Notes:
+1. Each Serial CMD block is 8-cycles (16-bits).
+2. Each Data Transfer block is 8-cycles (BL16)
+3. Burst can be either Read or Write, Change Bank doesn’t toggle R/W, NOP keeps current Burst condition
+4. NOP : No Operation Command
+5. Bx : Change Burst to Bank x
+6. Px : Pre Charge Bank x
+7. Ax : Activate Bank x
+8. Column addr X or Y or Z are random address in one of combinations of CA[4:9] 
+
+Column addr
+
+BL16
+BL16
+
+ 
+Figure 12-9. Seamless Burst 
+
+ 
+ 
+ 
+
+ 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    66 
+
+ 
+ 
+
+CLK
+
+STB
+
+CS#
+
+DQS
+
+Read Burst Transfer
+
+DB[15:0]
+
+8 Cycles Serial CMDs
+
+NOP
+Tog
+NOP
+NOP
+W0
+NOP
+NOP
+Tog
+R1
+NOP
+NOP
+NOP
+
+Write Burst Transfer
+
+NOP
+
+BL16
+
+Read Burst
+
+Bubble
+
+Write Mask
+
+tRTW
+tWTR
+
+WL
+RL
+
+tDQSCK
+
+Bubble
+
+ 
+Notes: 
+1. The number of RTW or WTR Bubbles are specified in Table 3-1.  
+2. Toggle Write or Read can apply to any Bank already activated. 
+3. NOP : No Operation Command. 
+4. Tog : Toggle Read/Write. 
+5. Wx : Write to Bank x. 
+6. Rx : Read from Bank x. 
+
+Figure 12-10. Toggle Read Write  
+
+ 
+
+ 
+ 
+
+CLK
+
+CS#
+
+DB
+
+STB
+
+DQS#
+DQS
+
+RL= AL+CL
+
+E0 O0 E1 O1 E2 O2 E3 O3 E4
+
+RD or NOP
+Burst STOP
+
+O4 E5 O5 E6 O6
+
+tBESL
+
+E7 O7
+
+tDQSCK
+
+8 cycles
+8 cycles
+
+AL
+CL
+
+AL always = 1
+
+8 cycles
+
+tHZ(DQS)
+NOP
+
+tHZ(DB)
+
+PRE begins here for BST + PRE
+
+ 
+
+Figure 12-11. Serial or Parallel Read Stopped by BST or BST + PRE 
+
+ 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    67 
+
+ 
+ 
+
+CLK
+
+DB
+
+STB
+
+DQS#
+DQS
+
+O0 E1 O1 E2 O2 E3 O3 E4
+
+WR or NOP
+Burst STOP
+
+O4 E5 O5 E6 O6
+
+tBESL
+
+E7 O7
+
+8 cycles
+8 cycles
+
+WL
+
+NOP
+
+CLK
+
+DB
+
+STB
+
+DQS#
+DQS
+
+A
+
+nWR
+
+nWR
+
+Write Burst Transfer
+
+A
+
+E0
+
+CS#
+Keep Low
+
+CS#
+Keep Low
+
+Notes: 
+1. Vaild1 CMD: ACT/RD/WR/PRE command are allowed
+2. Vaild2 CMD: all parallel command are allowed
+3. ACT command should satisfy specific timing
+4. PRE command should satisfy specific timing
+5. The previous state of MRS should be precharged state
+6. The previous state of UTR should be precharged state
+7. The previous state of ZQ calibration should be precharged state
+
+PRE begins here for BST + PRE
+
+Valid1
+Valid2
+
+ 
+
+Figure 12-12. Serial or Parallel Write Stopped by BST + PRE 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    68 
+
+ 
+ 
+
+CLK
+
+VDD
+
+STB
+
+CS#
+
+DQS
+
+DB[15:0]
+
+ZQ Calibration
+Valid CMD
+
+ZQINIT (Initialization Timing)
+
+ZQCS (Short Timing)
+
+ZQCL (Long Timing)
+
+ZQRESET (Reset Timing)
+
+DQS
+
+DB[15:0]
+
+ZQ Calibration
+Valid CMD
+
+DQS
+
+DB[15:0]
+
+ZQ Calibration
+Valid CMD
+
+DQS
+
+DB[15:0]
+
+ZQ Calibration
+Valid CMD
+
+tZQINIT
+
+tZQCS
+
+tZQCL
+
+tZQRESET
+
+tCSH
+
+tIH
+
+ 
+
+Figure 12-13. ZQ Calibration Timing 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    69 
+
+ 
+
+13 Package Outline Information 
+
+13.1 Package Dimensions 
+
+ 
+
+Table 13-1. 96-Ball FBGA (9 x 13 x 1.2mm) Dimension Table 
+
+Symbol 
+Dimension in inch 
+Dimension in mm 
+
+Min 
+Nom 
+Max 
+Min 
+Nom 
+Max 
+
+A 
+-- 
+-- 
+0.047 
+-- 
+-- 
+1.20 
+
+A1 
+0.010 
+-- 
+0.016 
+0.25 
+-- 
+0.40 
+
+D 
+0.350 
+0.354 
+0.358 
+8.90 
+9.00 
+9.10 
+
+E 
+0.508 
+0.512 
+0.516 
+12.90 
+13.00 
+13.10 
+
+D1 
+-- 
+0.252 
+-- 
+-- 
+6.40 
+-- 
+
+E1 
+-- 
+0.472 
+-- 
+-- 
+12.00 
+-- 
+
+F 
+-- 
+0.126 
+-- 
+-- 
+3.20 
+-- 
+
+e 
+-- 
+0.031 
+-- 
+-- 
+0.80 
+-- 
+
+b 
+0.016 
+0.018 
+0.020 
+0.40 
+0.45 
+0.50 
+
+ 
+
+Table 13-2. 50-Ball WLCSP (1.96 x 4.63 x 0.545mm) Dimension Table 
+
+Symbol 
+Dimension in inch 
+Dimension in mm 
+
+Min 
+Nom 
+Max 
+Min 
+Nom 
+Max 
+
+A 
+0.0191 
+0.0203 
+0.0215 
+0.485 
+0.515 
+0.545 
+
+A1 
+0.0067 
+0.0075 
+0.0083 
+0.170 
+0.190 
+0.210 
+
+A2 
+0.0110 
+0.0118 
+0.0126 
+0.280 
+0.300 
+0.320 
+
+A3 
+0.0009 
+0.0010 
+0.0011 
+0.022 
+0.025 
+0.028 
+
+b 
+0.0085 
+0.0094 
+0.0104 
+0.215 
+0.240 
+0.265 
+
+D 
+0.1811 
+0.1823 
+0.1835 
+4.600 
+4.630 
+4.660 
+
+E 
+0.0760 
+0.0772 
+0.0783 
+1.930 
+1.960 
+1.990 
+
+D1 
+-- 
+0.1693 
+-- 
+-- 
+4.300 
+-- 
+
+E1 
+-- 
+0.0630 
+-- 
+-- 
+1.600 
+-- 
+
+e 
+-- 
+0.0157 
+-- 
+-- 
+0.400 
+-- 
+
+e1 
+-- 
+0.0295 
+-- 
+-- 
+0.750 
+-- 
+
+* Special Notice: Pitch e and pitch e1 of Y coordinates are different values.
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    70 
+
+ 
+
+13.2 Package Outline 96-Ball FBGA (9 x 13 x 1.2mm) 
+
+ 
+
+ 
+ 
+ 
+
+Figure 13-1. Package Outline Drawing Information for 96-Ball FBGA (x16) 
+
+ 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    71 
+
+ 
+
+13.3 Package Outline 50-Ball WLCSP (1.96 x 4.63 x 0.545mm) 
+
+ 
+
+ 
+
+Figure 13-2. Package Outline Drawing Information for WLCSP (x16) 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    72 
+
+ 
+
+Revision History 
+
+Rev 
+Date 
+Comments 
+
+1.0  
+September 08, 2020  
+Initial release.  
+
+1.1  
+May 28, 2021 
+
+1. Added Block Diagram 
+2. Updated Section 2.13 – On Chip Termination 
+3. Revised waveform for tWPST  
+4. Updated Section 3.3 – Cycle Start and Command/Address Streaming via STB Pin 
+5. Updated Section 5 – Refreshing the DRAM Memory Array 
+6. Removed Section 6 – Multi Drop 
+7. Updated tWPST and VIH(AC)/VIL(AC) specifications 
+8. Removed tCHKREF, tCHKDLY, tCSSL, tRECSH Parameter 
+9. Added tPPD Parameter 
+10. Added waveform for tWPST in Low Latency 
+(Subsequent parts are numbered accordingly) 
+
+1.2 
+September 09, 2021 
+1. Revised tIS Parameter 
+2. Added Note 1 and Note 2 of Table 10-3 Recommended AC Parameters 
+
+1.3 
+February 22, 2023 
+
+1. Removed 54-ball FBGA package  
+2. Updated wording in Section 2.13 – On Chip Termination 
+3. Updated Table 2-3 Zout Resistance Selection Matrix  
+4. Updated Figure 2-2, Figure 2-7, Figure 2-8, Figure 3-4 and Figure 12-11 waveform 
+5. Renamed as On-Die Termination Definition and Parameters  
+6. Added Section 6 – Multi Drop 
+7. Updated Table 7-1, Parallel Packet Command Truth Table 
+8. Updated Table 7-2, MRS Truth Table 
+9. Revised IDD2P – Precharge Power-Down Current 
+10. Removed Frequency of 933MHz 
+11. Revised tBESL – Read Parameter 
+12. Removed Table A-1. 256Mb RPC DRAM Families 
+
+1.4 
+October 16, 2024 
+
+1. Updated Figure 1-2: Block Diagram 
+2. Revised Data Strobe wording 
+3. Revised wording in Section 3.11: ZQ Calibration Command 
+4. Revised wording in Section 5: Refreshing the DRAM Memory Array 
+5. Updated Input/Output Capacitance 
+6. Revised Refresh, tDQSCK, and tZQINIT specifications 
+7. Added Annex: Thermal Characteristics 
+
+ 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    73 
+
+ 
+
+Annex (Thermal Characteristics)  
+
+ 
+Definition: 
+θJA: Natural convection junction-to-ambient air thermal resistance 
+θJC: Thermal resistance from junction to case 
+θJB: The junction-to-board thermal resistance 
+TC: Temperature of Case 
+ 
+
+Operating case temperature (Industrial) 
+
+TC: -40°C ~ 85°C 
+
+TC: 85°C ~ 95°C 
+
+Package Type 
+θJA 
+θJC 
+θJB 
+Unit 
+
+WLCSP 50-ball 
+41.8 
+3.2 
+26.2 
+°C/W 
+
+FBGA 96-ball 
+55.16 
+15.31 
+41.41 
+°C/W 
+
+     EtronTech 
+
+  
+
+                         256Mb RPC DRAM® 
+
+ 
+ 
+
+ 
+Etron Technology, Inc.                                                                                     Rev. 1.4, Oct. /2024 
+Confidential and Proprietary                                    74 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+No. 6, Technology Rd. V, Hsinchu Science Park, Hsinchu, Taiwan 30078, R.O.C. 
+TEL: (886)-3-5782345  FAX: (886)-3-5778671 
+All product names and trademarks are the property of their respective owners. RPC® and RPC DRAM® are registered 
+trademarks of Etron Technology 
+The RPC DRAM Technology may be covered by one or more US and Foreign Patents including US Patents 10,380,060 and 
+10,642,776 
+Etron Technology, Inc. reserves the right to change products or specification without notice. 
+

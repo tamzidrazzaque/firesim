@@ -1,0 +1,392 @@
+[
+  {
+    "trace": "eth_full_pin_run",
+    "refresh_select": 0,
+    "commands": 21,
+    "accept": 21,
+    "violations": [],
+    "interpretations": []
+  },
+  {
+    "trace": "eth_full_pin_run",
+    "refresh_select": 1,
+    "commands": 21,
+    "accept": 21,
+    "violations": [],
+    "interpretations": []
+  },
+  {
+    "trace": "eth_full_pin_run",
+    "refresh_select": 2,
+    "commands": 21,
+    "accept": 21,
+    "violations": [],
+    "interpretations": []
+  },
+  {
+    "trace": "chipyard_eth_timing_rocket_stdout",
+    "refresh_select": 0,
+    "commands": 394,
+    "accept": 394,
+    "violations": [],
+    "interpretations": []
+  },
+  {
+    "trace": "chipyard_eth_timing_rocket_stdout",
+    "refresh_select": 1,
+    "commands": 394,
+    "accept": 394,
+    "violations": [],
+    "interpretations": []
+  },
+  {
+    "trace": "chipyard_eth_timing_rocket_stdout",
+    "refresh_select": 2,
+    "commands": 394,
+    "accept": 394,
+    "violations": [],
+    "interpretations": []
+  },
+  {
+    "trace": "chipyard_eth_timing_boom_stdout",
+    "refresh_select": 0,
+    "commands": 409,
+    "accept": 409,
+    "violations": [],
+    "interpretations": []
+  },
+  {
+    "trace": "chipyard_eth_timing_boom_stdout",
+    "refresh_select": 1,
+    "commands": 409,
+    "accept": 409,
+    "violations": [],
+    "interpretations": []
+  },
+  {
+    "trace": "chipyard_eth_timing_boom_stdout",
+    "refresh_select": 2,
+    "commands": 409,
+    "accept": 409,
+    "violations": [],
+    "interpretations": []
+  },
+  {
+    "trace": "eth_timing_directed_run",
+    "refresh_select": 0,
+    "commands": 57,
+    "accept": 47,
+    "violations": [
+      {
+        "kind": "VIOLATION",
+        "constraint": "REFRESH_BUSY",
+        "offered": "124563",
+        "earliest": "124608",
+        "op": "ACT"
+      },
+      {
+        "kind": "VIOLATION",
+        "constraint": "RW_BANK_IDLE",
+        "offered": "124579",
+        "earliest": "na",
+        "op": "RD"
+      },
+      {
+        "kind": "VIOLATION",
+        "constraint": "PRE_BANK_PRECHARGED",
+        "offered": "124619",
+        "earliest": "na",
+        "op": "PRE"
+      },
+      {
+        "kind": "VIOLATION",
+        "constraint": "REFRESH_BUSY",
+        "offered": "288491",
+        "earliest": "288536",
+        "op": "ACT"
+      },
+      {
+        "kind": "VIOLATION",
+        "constraint": "RW_BANK_IDLE",
+        "offered": "288507",
+        "earliest": "na",
+        "op": "RD"
+      },
+      {
+        "kind": "VIOLATION",
+        "constraint": "PRE_BANK_PRECHARGED",
+        "offered": "288547",
+        "earliest": "na",
+        "op": "PRE"
+      },
+      {
+        "kind": "VIOLATION",
+        "constraint": "REFRESH_BUSY",
+        "offered": "616259",
+        "earliest": "616304",
+        "op": "ACT"
+      },
+      {
+        "kind": "VIOLATION",
+        "constraint": "RW_BANK_IDLE",
+        "offered": "616275",
+        "earliest": "na",
+        "op": "RD"
+      }
+    ],
+    "interpretations": [
+      {
+        "kind": "INTERPRETATION",
+        "constraint": "REFRESH_BUSY",
+        "offered": "124635",
+        "earliest": "142688",
+        "op": "REF",
+        "detail": "refresh-completion-not-specified;rs1-earliest=124635;rs2-earliest=142688;state-updated-as-if-refresh-complete"
+      },
+      {
+        "kind": "INTERPRETATION",
+        "constraint": "REFRESH_BUSY",
+        "offered": "288563",
+        "earliest": "324696",
+        "op": "REF",
+        "detail": "refresh-completion-not-specified;rs1-earliest=288563;rs2-earliest=324696;state-updated-as-if-refresh-complete"
+      }
+    ]
+  },
+  {
+    "trace": "eth_timing_directed_run",
+    "refresh_select": 1,
+    "commands": 57,
+    "accept": 49,
+    "violations": [
+      {
+        "kind": "VIOLATION",
+        "constraint": "REFRESH_BUSY",
+        "offered": "124563",
+        "earliest": "124608",
+        "op": "ACT"
+      },
+      {
+        "kind": "VIOLATION",
+        "constraint": "RW_BANK_IDLE",
+        "offered": "124579",
+        "earliest": "na",
+        "op": "RD"
+      },
+      {
+        "kind": "VIOLATION",
+        "constraint": "PRE_BANK_PRECHARGED",
+        "offered": "124619",
+        "earliest": "na",
+        "op": "PRE"
+      },
+      {
+        "kind": "VIOLATION",
+        "constraint": "REFRESH_BUSY",
+        "offered": "288491",
+        "earliest": "288536",
+        "op": "ACT"
+      },
+      {
+        "kind": "VIOLATION",
+        "constraint": "RW_BANK_IDLE",
+        "offered": "288507",
+        "earliest": "na",
+        "op": "RD"
+      },
+      {
+        "kind": "VIOLATION",
+        "constraint": "PRE_BANK_PRECHARGED",
+        "offered": "288547",
+        "earliest": "na",
+        "op": "PRE"
+      },
+      {
+        "kind": "VIOLATION",
+        "constraint": "REFRESH_BUSY",
+        "offered": "616259",
+        "earliest": "616304",
+        "op": "ACT"
+      },
+      {
+        "kind": "VIOLATION",
+        "constraint": "RW_BANK_IDLE",
+        "offered": "616275",
+        "earliest": "na",
+        "op": "RD"
+      }
+    ],
+    "interpretations": []
+  },
+  {
+    "trace": "eth_timing_directed_run",
+    "refresh_select": 2,
+    "commands": 57,
+    "accept": 51,
+    "violations": [
+      {
+        "kind": "VIOLATION",
+        "constraint": "REFRESH_BUSY",
+        "offered": "124563",
+        "earliest": "142688",
+        "op": "ACT"
+      },
+      {
+        "kind": "VIOLATION",
+        "constraint": "RW_BANK_IDLE",
+        "offered": "124579",
+        "earliest": "na",
+        "op": "RD"
+      },
+      {
+        "kind": "VIOLATION",
+        "constraint": "PRE_BANK_PRECHARGED",
+        "offered": "124619",
+        "earliest": "na",
+        "op": "PRE"
+      },
+      {
+        "kind": "VIOLATION",
+        "constraint": "REFRESH_BUSY",
+        "offered": "124635",
+        "earliest": "142688",
+        "op": "REF"
+      },
+      {
+        "kind": "VIOLATION",
+        "constraint": "REFRESH_BUSY",
+        "offered": "616259",
+        "earliest": "688624",
+        "op": "ACT"
+      },
+      {
+        "kind": "VIOLATION",
+        "constraint": "RW_BANK_IDLE",
+        "offered": "616275",
+        "earliest": "na",
+        "op": "RD"
+      }
+    ],
+    "interpretations": []
+  },
+  {
+    "trace": "eth_timing_directed_negative",
+    "refresh_select": 0,
+    "commands": 45,
+    "accept": 44,
+    "violations": [
+      {
+        "kind": "VIOLATION",
+        "constraint": "REFRESH_BUSY",
+        "offered": "42571",
+        "earliest": "124536",
+        "op": "ACT"
+      }
+    ],
+    "interpretations": []
+  },
+  {
+    "trace": "eth_timing_directed_negative",
+    "refresh_select": 1,
+    "commands": 45,
+    "accept": 44,
+    "violations": [
+      {
+        "kind": "VIOLATION",
+        "constraint": "REFRESH_BUSY",
+        "offered": "42571",
+        "earliest": "124536",
+        "op": "ACT"
+      }
+    ],
+    "interpretations": []
+  },
+  {
+    "trace": "eth_timing_directed_negative",
+    "refresh_select": 2,
+    "commands": 45,
+    "accept": 44,
+    "violations": [
+      {
+        "kind": "VIOLATION",
+        "constraint": "REFRESH_BUSY",
+        "offered": "42571",
+        "earliest": "142616",
+        "op": "ACT"
+      }
+    ],
+    "interpretations": []
+  },
+  {
+    "trace": "eth_timing_directed_borderline",
+    "refresh_select": 0,
+    "commands": 45,
+    "accept": 44,
+    "violations": [
+      {
+        "kind": "VIOLATION",
+        "constraint": "REFRESH_BUSY",
+        "offered": "42587",
+        "earliest": "124536",
+        "op": "ACT"
+      }
+    ],
+    "interpretations": []
+  },
+  {
+    "trace": "eth_timing_directed_borderline",
+    "refresh_select": 1,
+    "commands": 45,
+    "accept": 44,
+    "violations": [
+      {
+        "kind": "VIOLATION",
+        "constraint": "REFRESH_BUSY",
+        "offered": "42587",
+        "earliest": "124536",
+        "op": "ACT"
+      }
+    ],
+    "interpretations": []
+  },
+  {
+    "trace": "eth_timing_directed_borderline",
+    "refresh_select": 2,
+    "commands": 45,
+    "accept": 44,
+    "violations": [
+      {
+        "kind": "VIOLATION",
+        "constraint": "REFRESH_BUSY",
+        "offered": "42587",
+        "earliest": "142616",
+        "op": "ACT"
+      }
+    ],
+    "interpretations": []
+  },
+  {
+    "trace": "eth_timing_directed_stress",
+    "refresh_select": 0,
+    "commands": 99,
+    "accept": 99,
+    "violations": [],
+    "interpretations": []
+  },
+  {
+    "trace": "eth_timing_directed_stress",
+    "refresh_select": 1,
+    "commands": 99,
+    "accept": 99,
+    "violations": [],
+    "interpretations": []
+  },
+  {
+    "trace": "eth_timing_directed_stress",
+    "refresh_select": 2,
+    "commands": 99,
+    "accept": 99,
+    "violations": [],
+    "interpretations": []
+  }
+]
