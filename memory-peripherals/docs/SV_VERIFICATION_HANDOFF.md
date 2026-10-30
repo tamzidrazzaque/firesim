@@ -22,6 +22,29 @@ BUSY signaling, while the observer rejects illegal command timing.
 | HyperRAM | [Infineon S80KS2562 Rev. *C, 256 Mb, 1.8 V](https://www.infineon.com/dgdl/Infineon-S80KS2562_1.8_V_256-Mb_HyperBus_Interface_HyperRAM_%28Self-Refresh_DRAM%29-DataSheet-v01_00-EN.pdf?fileId=8ac78c8c7dc4255f017dd82db3d308ae) | 200 MHz, normal operation, default fixed L=7 plus variable 1×/2× latency, CR0/CR1, 32 MiB array |
 | RPC DRAM | [Etron EM6GA16L Rev. 1.4](https://etron.com/wp-content/uploads/2022/04/EM6GA16LGDBXCAEA-RPC1-DRAM-Induatrial_Rev.-1.4.pdf) | 200 MHz ETH controller, CL=8, AL=1, RL=WL=9; separate Python speed-1600 CL=11 checker |
 
+## SV instantiation contract
+
+These three standalone modules have no RTL dependency on ETH or Chipyard.
+Compile the model and a caller's testbench with a simulator supporting the
+SystemVerilog constructs used here; `scripts/run_sv_spec_checks.sh` gives
+working Verilator commands. The ETH integration adds the controller and its
+declared dependencies. `rtl/tb_hyperram_pin.sv` and
+`integration/chipyard/SimRPC.v` show complete existing connections.
+
+| Module | Clock and host inputs | Device outputs | Required setting |
+|---|---|---|---|
+| `rtl/hyperram_pin_memory.sv` | `ck_i` at 200 MHz, active-low `reset_ni` and `cs_ni`, `dq_i` and `dq_oe_i`, `rwds_i` and `rwds_oe_i`, test-only `force_refresh_collision_i` | `dq_o`/`dq_oe_o`, `rwds_o`/`rwds_oe_o` | `TCK_NS=5`; select `TCSM_NS=4000` through 85 °C or `1000` above; use `FATAL_ON_VIOLATION=1` for a strict controller test |
+| `rtl/rpc_pin_memory.sv` | `clk_i` at 200 MHz, active-low `rst_ni` and `cs_ni`, `stb_i`, `db_i`/`db_oe_i`, `dqs_oe_i` | `db_o`, `dqs_o`, `dqs_no`, `dqs_oe_o` | CL=8 normal parallel mode; set `FATAL_ON_REFRESH_BUSY=1` for strict controller tests |
+| `rtl/rpc_timing_observe.sv` | **Same** `clk_i`, `rst_ni`, `cs_ni`, `stb_i`, `db_i`, `db_oe_i` as the RPC pin memory | No signal output; reports `RPC_TIMING_VIOLATION` with offered and earliest legal cycles | Set `FATAL_ON_VIOLATION=1` for strict controller tests |
+
+For RPC, instantiate the pin memory and timing observer in parallel on the
+same command pins. Give both the same `REFRESH_ROW_STEP`, `ROWS`, and
+`TREFI_FST`/`TREFI_LP` settings. The default row-step duration is inferred;
+`REFRESH_ROW_STEP=0` selects the one-tREFI interpretation. The observer does
+not gate the controller's command. Pair each output value with its output
+enable when connecting to bidirectional pads. The standalone digital models
+do not simulate analog setup/hold, board skew, or power rails.
+
 `rtl/hyperram_pin_memory.sv` accepts separate host DQ/RWDS values and output
 enables and drives device values and output enables. It checks the 48-bit DDR
 CA, latency, register writes, RWDS collision indication, write masks, linear
