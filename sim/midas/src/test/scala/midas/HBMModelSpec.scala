@@ -47,12 +47,6 @@ class HBMModelSpec extends AnyFlatSpec with ElaborationUtils {
     elaborateAndLower(new FirstReadyFCFSModel(frfcfsConfig))
   }
 
-  it should "default to unhashed banks" in {
-    val regs     = new FirstReadyFCFSMMRegIO(frfcfsConfig)
-    val defaults = regs.registers.map { case (elem, setting) => regs.getName(elem) -> setting }.toMap
-    assert(defaults("bankXorHash").default == 0)
-  }
-
   behavior.of("HBMModel")
 
   it should "elaborate and lower to Verilog" in {

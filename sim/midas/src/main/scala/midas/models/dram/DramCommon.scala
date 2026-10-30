@@ -65,8 +65,7 @@ class DRAMProgrammableTimings
     else tCAS
   }
 
-  // Defaults are set to sg093, x8, 2048Mb density (1GHz clock). Micron's
-  // sg093/x8 TRRD is 5000 ps, which is 5 controller cycles at 1 GHz.
+  // Defaults are set to sg093, x8, 2048Mb density (1GHz clock)
   val registers = Seq(
     tAL   -> RuntimeSetting(0, "Additive Latency"),
     tCAS  -> JSONSetting(14, "CAS Latency", { _("CL_TIME") }),
@@ -79,7 +78,7 @@ class DRAMProgrammableTimings
     tRC   -> JSONSetting(47, "Row Cycle time", { _("TRC") }),
     tRCD  -> JSONSetting(14, "Row-to-Column Delay", { _("TRCD") }),
     tRFC  -> JSONSetting(160, "ReFresh Cycle time", { _("TRFC_MIN") }),
-    tRRD  -> JSONSetting(5, "Row-to-Row Delay", { _("TRRD") }),
+    tRRD  -> JSONSetting(8, "Row-to-Row Delay", { _("TRRD") }),
     tRP   -> JSONSetting(14, "Row-Precharge delay", { _("TRP") }),
     tRTP  -> JSONSetting(8, "Read-To-Precharge delay", { lut => lut("TRTP").max(lut("TRTP_TCK")) }),
     tRTRS -> JSONSetting(2, "Rank-to-Rank Switching Time", { _ => 2 }), // FIXME
@@ -146,8 +145,6 @@ abstract class BaseDRAMMMRegIO(cfg: DRAMBaseConfig) extends MMRegIO(cfg) with Ha
 
   // Page policy 1 = open, 0 = closed
   val openPagePolicy = Input(Bool())
-  // Bank index 1 = XOR-hashed with the folded row address, 0 = plain bit slice
-  val bankXorHash    = Input(Bool())
   // Additional latency added to read data beats after it's received from the devices
   val backendLatency = Input(UInt(cfg.backendKey.latencyBits.W))
 
@@ -160,7 +157,6 @@ abstract class BaseDRAMMMRegIO(cfg: DRAMBaseConfig) extends MMRegIO(cfg) with Ha
   val dramBaseRegisters = Seq(
     (openPagePolicy -> RuntimeSetting(1, "Open-Page Policy")),
     (backendLatency -> RuntimeSetting(2, "Backend Latency", min = 1, max = Some(1 << (cfg.backendKey.latencyBits - 1)))),
-    (bankXorHash    -> RuntimeSetting(0, "XOR the folded row address into the bank index")),
   )
 
   // A list of DDR3 speed grades provided by micron.
@@ -335,12 +331,10 @@ class MASEntry(nastiParams: NastiParameters, key: DRAMBaseConfig)(implicit p: Pa
   val rankAddr   = UInt(key.dramKey.rankBits.W)
 
   def decode(from: XactionSchedulerEntry, mmReg: BaseDRAMMMRegIO): Unit = {
-    val row  = WireInit(UInt(key.dramKey.rowBits.W), mmReg.rowAddr.getSubAddr(from.addr))
-    val bank = WireInit(UInt(key.dramKey.bankBits.W), mmReg.bankAddr.getSubAddr(from.addr))
     xaction    := from.xaction
-    bankAddr   := Mux(mmReg.bankXorHash, bank ^ RowFold(row, key.dramKey.bankBits), bank)
+    bankAddr   := mmReg.bankAddr.getSubAddr(from.addr)
     bankAddrOH := UIntToOH(bankAddr)
-    rowAddr    := row
+    rowAddr    := mmReg.rowAddr.getSubAddr(from.addr)
     rankAddr   := mmReg.rankAddr.getSubAddr(from.addr)
     rankAddrOH := UIntToOH(rankAddr)
   }
