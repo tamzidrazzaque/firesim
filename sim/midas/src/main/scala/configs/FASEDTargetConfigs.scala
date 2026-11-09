@@ -274,3 +274,30 @@ class HBM2FRFCFS8HiQuadChannel
         new WithHBMBankOrganization(bankGroups = 8, banksPerGroup = 4) ++
         new HBM2FRFCFS16GBQuadChannel
     )
+
+// Byte-addressable technology-spec model. This does not replace the HBM or
+// DDR3 models. retentionSets is an elaboration parameter because it sizes a
+// direct-mapped timestamp table; 0 omits that table. The runtime card is
+// sim/custom-runtime-configs/techspec-illustrative-byte-nvm.conf.
+class WithTechSpecMemory(retentionSets: Int = 64, requestTrace: Boolean = false)
+    extends Config((site, _, _) => { case MemModelKey =>
+      new TechSpecMemoryConfig(
+        params        = site(BaseParamsKey).copy(beatCounters = true),
+        retentionSets = retentionSets,
+        requestTrace  = requestTrace,
+      )
+    })
+
+class TechSpecByteNVM
+    extends Config(
+      new WithFuncModelLimits(32, 32) ++
+        new WithTechSpecMemory() ++
+        new WithDefaultMemModel
+    )
+
+class TechSpecByteNVMTrace
+    extends Config(
+      new WithFuncModelLimits(32, 32) ++
+        new WithTechSpecMemory(requestTrace = true) ++
+        new WithDefaultMemModel
+    )

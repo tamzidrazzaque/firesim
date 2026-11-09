@@ -71,6 +71,7 @@ class WithNTransactions(num: Int)
       num
     })
 
+class NT200  extends WithNTransactions(200)
 class NT10e3 extends WithNTransactions(1000)
 class NT10e5 extends WithNTransactions(100000)
 class NT10e6 extends WithNTransactions(1000000)
@@ -261,4 +262,23 @@ class ConstrainedIdHostConfig
       new ConstrainHostIds(2) ++
         new WithNHostIdBits(2) ++
         new DefaultF1Config
+    )
+
+// AXI4Fuzzer against the technology-spec memory. The HBM and DDR platform
+// configs above are unchanged.
+class TechSpecF2Config
+    extends Config(
+      new TechSpecByteNVM ++
+        new midas.F2Config
+    )
+
+// F1 metasim of the same model with printf synthesis enabled. Trace lines
+// stay off until +mm_traceEnable_0=1. HBM and DDR configs are unchanged.
+class TechSpecF1TraceConfig
+    extends Config(
+      new Config((_, _, _) => { case midas.SynthPrints =>
+        true
+      }) ++
+        new TechSpecByteNVMTrace ++
+        new midas.F1Config
     )

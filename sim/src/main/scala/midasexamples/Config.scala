@@ -7,7 +7,13 @@ import org.chipsalliance.cde.config._
 import junctions._
 
 import firesim.configs.{MemModelKey, WithDefaultMemModel, WithWiringTransform}
-import midas.models.{BaseParams, HBMModelConfig, HBMOrganizationParams, LatencyPipeConfig}
+import midas.models.{
+  BaseParams,
+  HBMModelConfig,
+  HBMOrganizationParams,
+  LatencyPipeConfig,
+  TechSpecMemoryConfig,
+}
 
 import firesim.lib.nasti.NastiParameters
 
@@ -66,6 +72,12 @@ class PointerChaserHBM
         transactionQueueDepth = 8,
         params                = BaseParams(16, 16),
       )
+    })
+// PointerChaser against the technology-spec memory. Not part of the default
+// PointerChaser test list. Select with platform config PointerChaserTechSpec.
+class PointerChaserTechSpec
+    extends Config((_, _, _) => { case MemModelKey =>
+      new TechSpecMemoryConfig(params = BaseParams(16, 16), retentionSets = 64)
     })
 class PointerChaserConfig
     extends Config((_, _, _) => {
