@@ -253,12 +253,53 @@ object HBMTimingTables {
   // TODO(PARE): replace with the real PARE timing table when it is provided.
   val pare: Map[String, BigInt] = hbm2_2400
 
+  /** HBM4 at 8.0 Gbps/pin, tCK = 0.5 ns (JESD270-4A Table 107).
+    *
+    * Printed by the standard: tCCDS = 2, tCCDL = max(4, 2.5 ns/tCK) = 5,
+    * tRREFD = max(3 CK, 8 ns) = 16, tRFCSB = 280 ns = 560, tRFC = 450 ns = 900
+    * (32 Gb 8-high), tREFI = 3.9 us = 7800.
+    *
+    * Table 99 IDD example, explicitly not a minimum: tRAS = 33 ns = 66,
+    * tRP = 15 ns = 30, tRC = 48 ns = 96.
+    *
+    * Not printed (Table 108 minimum is "-"). Held at the HBM2-2000
+    * nanosecond value and converted at 0.5 ns: tCAS 14 ns = 28, tCWD 5 ns = 10,
+    * tRCDRD 14 ns = 28, tRCDWR 12 ns = 24, tRRDS/tRRDL 4 ns = 8, tFAW 15 ns = 30,
+    * tWTRS 6 ns = 12, tWTRL 8 ns = 16, tRTP 5 ns = 10, tWR 16 ns = 32.
+    * tBL and tCMD are the model's burst and command slots, not a new HBM4 bus.
+    */
+  val hbm4_8000: Map[String, BigInt] = Map(
+    "tCAS"   -> 28,
+    "tCWD"   -> 10,
+    "tBL"    -> 2,
+    "tCMD"   -> 1,
+    "tCCDS"  -> 2,
+    "tCCDL"  -> 5,
+    "tRRDS"  -> 8,
+    "tRRDL"  -> 8,
+    "tFAW"   -> 30,
+    "tWTRS"  -> 12,
+    "tWTRL"  -> 16,
+    "tRCDRD" -> 28,
+    "tRCDWR" -> 24,
+    "tRP"    -> 30,
+    "tRAS"   -> 66,
+    "tRC"    -> 96,
+    "tRTP"   -> 10,
+    "tWR"    -> 32,
+    "tREFI"  -> 7800,
+    "tRFC"   -> 900,
+    "tRFCSB" -> 560,
+    "tRREFD" -> 16,
+  ).map { case (k, v) => k -> BigInt(v) }
+
   // _1 = table, _2 = long name shown in interactive selection
   val grades = Seq(
     (hbm2_2400 -> "HBM2-2400 (JESD235, tCK = 833 ps)"),
     (hbm2_2000 -> "HBM2-2000 (JESD235, tCK = 1000 ps)"),
     (hbm2_1600 -> "HBM2-1600 (JESD235, tCK = 1250 ps)"),
     (pare      -> "PARE (PLACEHOLDER -- currently aliases HBM2-2400)"),
+    (hbm4_8000 -> "HBM4-8000 (JESD270-4A printed values; blank core timings filled from HBM2-2000 ns and Table 99)"),
   )
 }
 

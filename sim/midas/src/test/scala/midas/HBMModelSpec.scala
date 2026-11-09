@@ -134,6 +134,21 @@ class HBMModelSpec extends AnyFlatSpec with ElaborationUtils {
     }
   }
 
+  it should "encode HBM4-8000 from the printed JESD270-4A values plus documented fills" in {
+    val t = HBMTimingTables.hbm4_8000
+    assert(t.keySet == HBMTimingTables.hbm2_2000.keySet)
+    // Printed by Table 107/108. One cycle is 0.5 ns.
+    assert(t("tCCDS") == 2 && t("tCCDL") == 5 && t("tRREFD") == 16)
+    assert(t("tRFCSB") == 560 && t("tRFC") == 900 && t("tREFI") == 7800)
+    // Table 99 IDD example, not a minimum. nRAS + nRP = nRC.
+    assert(t("tRAS") == 66 && t("tRP") == 30 && t("tRC") == 96)
+    assert(t("tRC") == t("tRAS") + t("tRP"))
+    // Not printed. HBM2-2000 nanoseconds, rounded up at 0.5 ns.
+    assert(t("tCAS") == 28 && t("tRCDRD") == 28 && t("tRCDWR") == 24)
+    assert(t("tCWD") == 10 && t("tRRDS") == 8 && t("tRRDL") == 8 && t("tFAW") == 30)
+    assert(t("tWTRS") == 12 && t("tWTRL") == 16 && t("tRTP") == 10 && t("tWR") == 32)
+  }
+
   it should "have complete HBM2 timing tables" in {
     val timings = new HBMProgrammableTimings()
     val fields  = timings.registers.map { case (elem, _) => timings.getName(elem) }.toSet
