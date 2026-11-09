@@ -68,22 +68,24 @@ class TechSpecMMRegIO(val cfg: TechSpecMemoryConfig)(implicit p: Parameters) ext
   val writeLatency         = Input(UInt(32.W))
   val readServiceCycles    = Input(UInt(32.W))
   val writeServiceCycles   = Input(UInt(32.W))
-  val enduranceLimitBytes  = Input(UInt(64.W))
-  val retentionCycles      = Input(UInt(64.W))
+  // FASED's control register file is 32 bits wide (CtrlNastiKey). Wider
+  // fields fail when the bridge attaches them. Counters wrap at 2^32.
+  val enduranceLimitBytes  = Input(UInt(32.W))
+  val retentionCycles      = Input(UInt(32.W))
   // Ignored unless the model was elaborated with requestTrace. Kept
   // unconditional so every TechSpec runtime config has the same register.
   val traceEnable          = Input(UInt(1.W))
 
-  val deviceReadBytes      = Output(UInt(64.W))
-  val deviceWriteBytes     = Output(UInt(64.W))
-  val logicalWriteBytes    = Output(UInt(64.W))
-  val enduranceExceeded    = Output(Bool())
-  val admittedReads        = Output(UInt(64.W))
-  val admittedWrites       = Output(UInt(64.W))
-  val issuerBusyCycles     = Output(UInt(64.W))
-  val retentionFreshReads  = Output(UInt(64.W))
-  val retentionStaleReads  = Output(UInt(64.W))
-  val retentionUnknownReads = Output(UInt(64.W))
+  val deviceReadBytes       = Output(UInt(32.W))
+  val deviceWriteBytes      = Output(UInt(32.W))
+  val logicalWriteBytes     = Output(UInt(32.W))
+  val enduranceExceeded     = Output(Bool())
+  val admittedReads         = Output(UInt(32.W))
+  val admittedWrites        = Output(UInt(32.W))
+  val issuerBusyCycles      = Output(UInt(32.W))
+  val retentionFreshReads   = Output(UInt(32.W))
+  val retentionStaleReads   = Output(UInt(32.W))
+  val retentionUnknownReads = Output(UInt(32.W))
 
   val registers = maxReqRegisters ++ Seq(
     (readLatency         -> RuntimeSetting(30, "Read latency in target cycles, including the egress cycle", min = 1)),
@@ -156,13 +158,13 @@ class TechSpecMemoryModel(cfg: TechSpecMemoryConfig)(implicit p: Parameters) ext
   writePipe.io.deq.ready := wResp.ready && writeDone
   assert(writePipe.io.enq.ready || !writeAdmit, "TechSpec write pipe would overflow.")
 
-  val deviceReadBytes  = RegInit(0.U(64.W))
-  val deviceWriteBytes = RegInit(0.U(64.W))
-  val logicalWriteBytes = RegInit(0.U(64.W))
+  val deviceReadBytes   = RegInit(0.U(32.W))
+  val deviceWriteBytes  = RegInit(0.U(32.W))
+  val logicalWriteBytes = RegInit(0.U(32.W))
   val enduranceExceeded = RegInit(false.B)
-  val admittedReads     = RegInit(0.U(64.W))
-  val admittedWrites    = RegInit(0.U(64.W))
-  val issuerBusyCycles  = RegInit(0.U(64.W))
+  val admittedReads     = RegInit(0.U(32.W))
+  val admittedWrites    = RegInit(0.U(32.W))
+  val issuerBusyCycles  = RegInit(0.U(32.W))
 
   def xferBytes(len: UInt, size: UInt): UInt = (len +& 1.U) << size
 
@@ -194,9 +196,9 @@ class TechSpecMemoryModel(cfg: TechSpecMemoryConfig)(implicit p: Parameters) ext
   io.mmReg.admittedWrites    := admittedWrites
   io.mmReg.issuerBusyCycles  := issuerBusyCycles
 
-  val freshReads   = RegInit(0.U(64.W))
-  val staleReads   = RegInit(0.U(64.W))
-  val unknownReads = RegInit(0.U(64.W))
+  val freshReads   = RegInit(0.U(32.W))
+  val staleReads   = RegInit(0.U(32.W))
+  val unknownReads = RegInit(0.U(32.W))
   if (cfg.retentionSets > 0) {
     val granBits = log2Ceil(cfg.retentionGranularityBytes)
     val setBits  = log2Ceil(cfg.retentionSets)
@@ -205,7 +207,7 @@ class TechSpecMemoryModel(cfg: TechSpecMemoryConfig)(implicit p: Parameters) ext
     val tagBits  = addrBits - granBits - setBits
     val retValid = RegInit(VecInit(Seq.fill(cfg.retentionSets)(false.B)))
     val retTag   = Reg(Vec(cfg.retentionSets, UInt(tagBits.W)))
-    val retWrite = Reg(Vec(cfg.retentionSets, UInt(64.W)))
+    val retWrite = Reg(Vec(cfg.retentionSets, UInt(32.W)))
 
     def setIndex(addr: UInt): UInt = addr(granBits + setBits - 1, granBits)
     def lineTag(addr: UInt): UInt  = addr(addrBits - 1, granBits + setBits)
@@ -216,7 +218,7 @@ class TechSpecMemoryModel(cfg: TechSpecMemoryConfig)(implicit p: Parameters) ext
     when(readAdmit && io.mmReg.retentionCycles =/= 0.U) {
       when(!rHit) {
         unknownReads := unknownReads + 1.U
-      }.elsewhen((tCycle - retWrite(rIdx)) > io.mmReg.retentionCycles) {
+      }.elsewhen((tCycle(31, 0) - retWrite(rIdx)) > io.mmReg.retentionCycles) {
         staleReads := staleReads + 1.U
       }.otherwise {
         freshReads := freshReads + 1.U
@@ -226,7 +228,7 @@ class TechSpecMemoryModel(cfg: TechSpecMemoryConfig)(implicit p: Parameters) ext
       val wIdx = setIndex(awQueue.io.deq.bits.addr)
       retValid(wIdx) := true.B
       retTag(wIdx)   := lineTag(awQueue.io.deq.bits.addr)
-      retWrite(wIdx) := tCycle
+      retWrite(wIdx) := tCycle(31, 0)
     }
   }
   io.mmReg.retentionFreshReads   := freshReads

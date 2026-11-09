@@ -1,0 +1,9 @@
+{
+  "events": 200,
+  "reads": 190,
+  "writes": 10,
+  "target_cycles": 526009,
+  "passed_cycles": 526009,
+  "print_cycle_mismatches": 0,
+  "errors": []
+}

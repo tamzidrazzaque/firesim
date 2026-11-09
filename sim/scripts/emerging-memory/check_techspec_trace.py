@@ -18,8 +18,11 @@ import json
 import re
 import sys
 
+# Chisel printf pads each integer to its bit width, so fields contain spaces.
+# The print bridge may also prefix "CYCLE: <n> ".
 LINE = re.compile(
-    r"^TECHSPEC,(\d+),(\d+),([0-9a-fA-F]+),(\d+),(\d+),(\d+),(\d+),(\d+)\s*$"
+    r"(?:CYCLE:\s*(\d+)\s+)?"
+    r"TECHSPEC,\s*(\d+)\s*,\s*(\d+)\s*,\s*([0-9a-fA-F]+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)"
 )
 CYCLES = re.compile(r"Target Cycles Emulated:\s*(\d+)")
 PASSED = re.compile(r"\*\*\* PASSED \*\*\* after (\d+) cycles")
@@ -46,11 +49,12 @@ def main() -> int:
     with open(args.logfile) as handle:
         for raw in handle:
             line = raw.strip()
-            match = LINE.match(line)
+            match = LINE.search(line)
             if match:
-                cycle, is_write, addr, axi_id, length, size, start, release = match.groups()
+                print_cycle, cycle, is_write, addr, axi_id, length, size, start, release = match.groups()
                 events.append(
                     {
+                        "print_cycle": int(print_cycle) if print_cycle is not None else None,
                         "cycle": int(cycle),
                         "is_write": int(is_write),
                         "addr": int(addr, 16),
@@ -72,6 +76,7 @@ def main() -> int:
     errors = []
     if not events:
         errors.append("no TECHSPEC lines")
+    print_cycle_mismatches = 0
     next_service = 0
     pending = []
     for index, event in enumerate(events):
@@ -94,6 +99,8 @@ def main() -> int:
             )
         if event["start"] < event["cycle"]:
             errors.append(f"line {index}: start before admit cycle")
+        if event["print_cycle"] is not None and event["print_cycle"] != event["cycle"]:
+            print_cycle_mismatches += 1
         if pending and event["start"] < pending[-1][0] + pending[-1][1]:
             errors.append(f"line {index}: service window overlaps the previous op")
         pending.append((event["start"], occ))
@@ -107,6 +114,7 @@ def main() -> int:
         "writes": writes,
         "target_cycles": target_cycles,
         "passed_cycles": passed_cycles,
+        "print_cycle_mismatches": print_cycle_mismatches,
         "errors": errors,
     }
     text = json.dumps(summary, indent=2)

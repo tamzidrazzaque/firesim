@@ -1,0 +1,5 @@
+simulator_entry: start...
+qsfp_num_chans: 0
+simif_emul_t: done
+simulator_entry: complete
+FireSim fingerprint: 0x46697265

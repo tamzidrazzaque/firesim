@@ -282,3 +282,15 @@ class TechSpecF1TraceConfig
         new TechSpecByteNVMTrace ++
         new midas.F1Config
     )
+
+// This FireSim tree accepts PLATFORM=f2, not f1. Same memory model as
+// TechSpecF1TraceConfig, with synthesized prints so a metasim can emit
+// TECHSPEC lines.
+class TechSpecF2TraceConfig
+    extends Config(
+      new Config((_, _, _) => { case midas.SynthPrints =>
+        true
+      }) ++
+        new TechSpecByteNVMTrace ++
+        new midas.F2Config
+    )
